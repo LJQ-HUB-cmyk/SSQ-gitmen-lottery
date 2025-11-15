@@ -1,0 +1,295 @@
+"""
+双色球预测引擎
+基于历史中奖号码和专业彩票算法进行预测
+"""
+
+from core.base_predictor import BasePredictor, BaseStatistics
+from core.utils import has_consecutive_numbers, format_number
+import logging
+from typing import List, Tuple, Set
+from collections import Counter
+import itertools
+from datetime import datetime
+
+logger = logging.getLogger(__name__)
+
+
+class SSQPredictor(BasePredictor):
+    """双色球预测类"""
+
+    RED_RANGE = range(1, 34)  # 红球范围 1-33
+    BLUE_RANGE = range(1, 17)  # 蓝球范围 1-16
+    RED_COUNT = 6  # 红球个数
+
+    def __init__(self, lottery_data: List[dict]):
+        """
+        初始化预测器
+
+        Args:
+            lottery_data: 历史中奖数据列表
+        """
+        self.all_red_balls = set(self.RED_RANGE)
+        self.all_blue_balls = set(self.BLUE_RANGE)
+        super().__init__(lottery_data)
+
+    def _analyze_history(self):
+        """分析历史数据"""
+        self.historical_red_combinations = set()
+        self.red_ball_frequency = Counter()
+        self.blue_ball_frequency = Counter()
+
+        for data in self.lottery_data:
+            red_balls = tuple(sorted(data['red_balls']))
+            blue_ball = data['blue_ball']
+
+            self.historical_red_combinations.add(red_balls)
+
+            for ball in data['red_balls']:
+                self.red_ball_frequency[ball] += 1
+
+            self.blue_ball_frequency[blue_ball] += 1
+
+        logger.info(f"历史中奖组合数: {len(self.historical_red_combinations)}")
+
+    def _is_valid_combination(self, red_balls: List[int]) -> bool:
+        """
+        验证组合是否有效
+
+        规则:
+        1. 不能是历史中奖号码
+        2. 不能有3个或以上连号
+
+        Args:
+            red_balls: 红球号码列表
+
+        Returns:
+            True 表示有效
+        """
+        # 检查是否是历史中奖号码
+        if tuple(sorted(red_balls)) in self.historical_red_combinations:
+            return False
+
+        # 检查是否有3个或以上连号
+        if has_consecutive_numbers(sorted(red_balls), max_consecutive=3):
+            return False
+
+        return True
+
+    def predict_red_balls(self, count: int = 5) -> List[List[int]]:
+        """
+        预测红球组合
+
+        使用策略：
+        1. 基于历史频率分析，选择高频号码
+        2. 排除历史中奖组合
+        3. 排除超过3个连号的组合
+        4. 综合考虑号码分布
+
+        Args:
+            count: 预测组合数
+
+        Returns:
+            预测的红球组合列表
+        """
+        predictions = []
+
+        # 获取高频号码
+        top_balls = self._get_top_frequency_balls(count=15)
+        logger.info(f"高频号码: {top_balls}")
+
+        # 生成候选组合
+        candidate_combinations = []
+        for combo in itertools.combinations(top_balls, self.RED_COUNT):
+            if self._is_valid_combination(list(combo)):
+                candidate_combinations.append(sorted(list(combo)))
+
+        # 如果高频号码的组合不足，扩展到全部号码
+        if len(candidate_combinations) < count:
+            logger.info("高频号码组合不足，扩展到全部号码")
+            for combo in itertools.combinations(self.all_red_balls, self.RED_COUNT):
+                if self._is_valid_combination(list(combo)):
+                    candidate_combinations.append(sorted(list(combo)))
+                    if len(candidate_combinations) >= count * 2:
+                        break
+
+        # 评分并选择最优组合
+        scored_combinations = [
+            (combo, self._score_combination(combo))
+            for combo in candidate_combinations
+        ]
+        scored_combinations.sort(key=lambda x: x[1], reverse=True)
+
+        predictions = [combo for combo, score in scored_combinations[:count]]
+
+        logger.info(f"生成了 {len(predictions)} 个预测组合")
+        return predictions
+
+    def _get_top_frequency_balls(self, count: int = 15) -> List[int]:
+        """获取高频号码"""
+        return [ball for ball, freq in self.red_ball_frequency.most_common(count)]
+
+    def _score_combination(self, combo: List[int]) -> float:
+        """
+        对组合进行评分
+
+        评分规则：
+        1. 号码频率得分：高频号码得分高
+        2. 分布得分：号码分布越均匀得分越高
+        3. 间距得分：号码间距适当得分高
+        """
+        score = 0
+
+        # 频率得分 (40%)
+        frequency_score = sum(self.red_ball_frequency[ball] for ball in combo)
+        score += frequency_score * 0.4
+
+        # 分布得分 (30%) - 号码在1-33范围内的分布
+        segments = [0] * 6  # 分成6段，每段5-6个数
+        for ball in combo:
+            segment = min((ball - 1) // 6, 5)
+            segments[segment] += 1
+        distribution_score = 6 - len([s for s in segments if s == 0])
+        score += distribution_score * 30
+
+        # 间距得分 (30%) - 相邻号码的间距
+        sorted_combo = sorted(combo)
+        gaps = [sorted_combo[i+1] - sorted_combo[i] for i in range(len(sorted_combo)-1)]
+        avg_gap = sum(gaps) / len(gaps)
+        gap_score = min(avg_gap / 6 * 100, 30)  # 理想间距约为6
+        score += gap_score
+
+        return score
+
+    def predict_blue_ball(self, count: int = 1) -> List[int]:
+        """
+        预测蓝球
+
+        使用高频号码预测
+
+        Args:
+            count: 预测个数
+
+        Returns:
+            预测的蓝球号码列表
+        """
+        top_blue_balls = [ball for ball, freq in self.blue_ball_frequency.most_common(count)]
+        logger.info(f"预测的蓝球: {top_blue_balls}")
+        return top_blue_balls
+
+    def predict(self, red_count: int = 5, blue_count: int = 1) -> List[dict]:
+        """
+        完整预测
+
+        Args:
+            red_count: 预测红球组合数
+            blue_count: 预测蓝球个数
+
+        Returns:
+            预测结果列表
+        """
+        predicted_red_balls = self.predict_red_balls(red_count)
+        predicted_blue_balls = self.predict_blue_ball(blue_count)
+
+        predictions = []
+        for i, red_balls in enumerate(predicted_red_balls):
+            for blue_ball in predicted_blue_balls:
+                predictions.append({
+                    'rank': i + 1,
+                    'red_balls': red_balls,
+                    'blue_ball': blue_ball,
+                    'prediction_time': datetime.now().isoformat(),
+                    'description': f'预测组合 {i + 1}'
+                })
+
+        return predictions
+
+
+class SSQStatistics(BaseStatistics):
+    """双色球统计类"""
+
+    def __init__(self, lottery_data: List[dict]):
+        super().__init__(lottery_data)
+
+    def get_frequency(self) -> dict:
+        """获取号码频率统计"""
+        red_freq = Counter()
+        blue_freq = Counter()
+
+        for data in self.lottery_data:
+            for ball in data['red_balls']:
+                red_freq[ball] += 1
+            blue_freq[data['blue_ball']] += 1
+
+        return {
+            'red_balls': dict(sorted(red_freq.items())),
+            'blue_ball': dict(sorted(blue_freq.items()))
+        }
+    
+    def get_ball_frequency(self) -> dict:
+        """获取号码频率统计（兼容旧接口）"""
+        return self.get_frequency()
+
+    def get_consecutive_analysis(self) -> dict:
+        """分析连号情况"""
+        consecutive_stats = {
+            '1个连号': 0,
+            '2个连号': 0,
+            '3个连号': 0,
+            '无连号': 0
+        }
+
+        for data in self.lottery_data:
+            consecutive_count = self._find_max_consecutive(data['red_balls'])
+            if consecutive_count == 0:
+                consecutive_stats['无连号'] += 1
+            elif consecutive_count == 1:
+                consecutive_stats['1个连号'] += 1
+            elif consecutive_count == 2:
+                consecutive_stats['2个连号'] += 1
+            else:
+                consecutive_stats['3个连号'] += 1
+
+        return consecutive_stats
+
+    @staticmethod
+    def _find_max_consecutive(balls: List[int]) -> int:
+        """找出最长连号个数"""
+        sorted_balls = sorted(balls)
+        max_consecutive = 0
+        current_consecutive = 0
+
+        for i in range(1, len(sorted_balls)):
+            if sorted_balls[i] - sorted_balls[i-1] == 1:
+                current_consecutive += 1
+            else:
+                max_consecutive = max(max_consecutive, current_consecutive)
+                current_consecutive = 0
+
+        return max(max_consecutive, current_consecutive)
+
+
+if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO)
+
+    # 示例数据
+    sample_data = [
+        {
+            'lottery_no': '2024001',
+            'draw_date': '2024-01-01',
+            'red_balls': [1, 5, 10, 15, 20, 25],
+            'blue_ball': 8
+        },
+        {
+            'lottery_no': '2024002',
+            'draw_date': '2024-01-04',
+            'red_balls': [2, 6, 11, 16, 21, 26],
+            'blue_ball': 12
+        }
+    ]
+
+    predictor = SSQPredictor(sample_data)
+    predictions = predictor.predict()
+
+    print("预测结果:")
+    for pred in predictions:
+        print(pred)
