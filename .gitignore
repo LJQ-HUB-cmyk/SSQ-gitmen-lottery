@@ -55,3 +55,7 @@ Thumbs.db
 *.tmp
 *.bak
 *.cache
+
+# 测试临时文件
+tests/*.pyc
+tests/__pycache__/

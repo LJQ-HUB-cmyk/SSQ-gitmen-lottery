@@ -1,5 +1,34 @@
 # 更新日志
 
+## [2.2.3] - 2025-11-15
+
+### 🧪 测试和项目结构优化
+
+#### 项目结构整理
+- ✅ 新增 `tests/` 目录，集中管理测试文件
+- ✅ 移动所有测试脚本到 `tests/` 目录
+- ✅ 移动测试报告到 `tests/` 目录
+- ✅ 删除临时指南文件（GITHUB_SETUP.md、PUSH_TO_GITHUB.md）
+- ✅ 清理空目录（data/backup、data/export）
+- ✅ 根目录保持简洁（仅 8 个文件）
+
+#### Telegram Bot 测试
+- ✅ 完成 Telegram Bot 功能测试
+- ✅ 验证代理配置（本地开发）
+- ✅ 确认消息发送功能正常
+- ✅ Bot 信息：@ssqdltbot (lottery_bot)
+
+#### 配置优化
+- ✅ 更新 .env 代理配置说明（仅本地开发需要）
+- ✅ 更新 .env.example 添加代理使用说明
+- ✅ 明确区分本地开发和生产环境配置
+- ✅ 新增 tests/README.md 测试指南
+
+#### 文档完善
+- ✅ 新增 `docs/TELEGRAM_PROXY_SETUP.md` - 代理配置详细指南
+- ✅ 新增 `tests/README.md` - 测试文件使用说明
+- ✅ 更新 .gitignore 忽略测试临时文件
+
 ## [2.2.2] - 2025-11-15
 
 ### ⭐ Star 引导优化
@@ -14,7 +43,6 @@
 
 #### 新增文件
 - ✅ `docs/STAR_GUIDE.md` - Star 指南
-- ✅ `GITHUB_SETUP.md` - GitHub 仓库设置指南
 - ✅ `scripts/setup_github.sh` - 快速设置脚本
 
 #### 优化策略
@@ -307,7 +335,7 @@ docs/
 
 ---
 
-**最新版本**: 2.2.2  
+**最新版本**: 2.2.3  
 **更新日期**: 2025-11-15  
 **状态**: 🟢 生产就绪  
 **重要**: ⚠️ 使用前请阅读 [DISCLAIMER.md](DISCLAIMER.md)  
