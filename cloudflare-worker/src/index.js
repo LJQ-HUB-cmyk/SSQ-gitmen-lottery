@@ -309,8 +309,7 @@ export default {
             message: '批量导入完成',
             inserted: result.inserted,
             skipped: result.skipped,
-            total: currentTotal,
-            batch_size: batchSize
+            total: currentTotal
           }),
           {
             headers: { 'Content-Type': 'application/json; charset=utf-8' }
