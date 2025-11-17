@@ -11,30 +11,47 @@ export class Database {
    * 初始化数据库表
    */
   async init() {
-    const sql = `
-      CREATE TABLE IF NOT EXISTS ssq_lottery (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        lottery_no TEXT UNIQUE NOT NULL,
-        draw_date TEXT NOT NULL,
-        red1 TEXT NOT NULL,
-        red2 TEXT NOT NULL,
-        red3 TEXT NOT NULL,
-        red4 TEXT NOT NULL,
-        red5 TEXT NOT NULL,
-        red6 TEXT NOT NULL,
-        blue TEXT NOT NULL,
-        sorted_code TEXT NOT NULL,
-        created_at TEXT DEFAULT (datetime('now')),
-        updated_at TEXT DEFAULT (datetime('now'))
-      );
+    try {
+      // 创建表
+      await this.db.prepare(`
+        CREATE TABLE IF NOT EXISTS ssq_lottery (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          lottery_no TEXT UNIQUE NOT NULL,
+          draw_date TEXT NOT NULL,
+          red1 TEXT NOT NULL,
+          red2 TEXT NOT NULL,
+          red3 TEXT NOT NULL,
+          red4 TEXT NOT NULL,
+          red5 TEXT NOT NULL,
+          red6 TEXT NOT NULL,
+          blue TEXT NOT NULL,
+          sorted_code TEXT NOT NULL,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now'))
+        )
+      `).run();
 
-      CREATE INDEX IF NOT EXISTS idx_lottery_no ON ssq_lottery(lottery_no);
-      CREATE INDEX IF NOT EXISTS idx_draw_date ON ssq_lottery(draw_date);
-      CREATE INDEX IF NOT EXISTS idx_sorted_code ON ssq_lottery(sorted_code);
-    `;
+      // 创建索引
+      await this.db.prepare(`
+        CREATE INDEX IF NOT EXISTS idx_lottery_no ON ssq_lottery(lottery_no)
+      `).run();
+      
+      await this.db.prepare(`
+        CREATE INDEX IF NOT EXISTS idx_draw_date ON ssq_lottery(draw_date)
+      `).run();
+      
+      await this.db.prepare(`
+        CREATE INDEX IF NOT EXISTS idx_sorted_code ON ssq_lottery(sorted_code)
+      `).run();
 
-    await this.db.exec(sql);
-    console.log('数据库初始化完成');
+      console.log('数据库初始化完成');
+    } catch (error) {
+      console.error('数据库初始化失败:', error);
+      // 如果表已存在，忽略错误
+      if (!error.message.includes('already exists')) {
+        throw error;
+      }
+    }
   }
 
   /**

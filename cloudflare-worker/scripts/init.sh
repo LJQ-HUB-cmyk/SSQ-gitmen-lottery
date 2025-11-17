@@ -4,8 +4,7 @@
 # 用于首次运行时分批导入历史数据
 
 # 配置
-WORKER_URL=""
-API_KEY=""
+
 MAX_ITERATIONS=50  # 最多执行 50 次
 SLEEP_TIME=120     # 每次间隔 120 秒（2 分钟）
 
