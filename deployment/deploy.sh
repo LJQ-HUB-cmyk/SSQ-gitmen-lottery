@@ -42,6 +42,33 @@ fi
 
 echo "✓ .env 文件存在"
 
+# 选择 Dockerfile
+echo ""
+echo "选择 Dockerfile 版本："
+echo "1) 默认版本（推荐海外服务器）"
+echo "2) 国内镜像源版本（推荐国内服务器）"
+echo "3) 最小化版本（网络受限环境）"
+echo ""
+read -p "请选择 [1-3]: " dockerfile_choice
+
+case $dockerfile_choice in
+    2)
+        echo "使用国内镜像源版本..."
+        cp docker/Dockerfile.cn docker/Dockerfile
+        ;;
+    3)
+        echo "使用最小化版本..."
+        cp docker/Dockerfile.minimal docker/Dockerfile
+        ;;
+    *)
+        echo "使用默认版本..."
+        # 确保使用原始 Dockerfile
+        if [ -f docker/Dockerfile.original ]; then
+            cp docker/Dockerfile.original docker/Dockerfile
+        fi
+        ;;
+esac
+
 # 检查必要的环境变量
 source ../.env
 

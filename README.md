@@ -2,7 +2,7 @@
 
 # 🎰 彩票预测系统
 
-**基于历史数据的智能彩票号码预测系统 | 支持 Docker 多容器部署**
+**基于历史数据的智能彩票号码预测系统 | 支持 Docker 和 Cloudflare Workers 部署**
 
 [![GitHub stars](https://img.shields.io/github/stars/88899/gitmen-lottery?style=social)](https://github.com/88899/gitmen-lottery/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/88899/gitmen-lottery?style=social)](https://github.com/88899/gitmen-lottery/network/members)
@@ -11,6 +11,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/docker-ready-brightgreen.svg)](https://www.docker.com/)
+[![Cloudflare Workers](https://img.shields.io/badge/cloudflare-workers-orange.svg)](https://workers.cloudflare.com/)
 
 ---
 
@@ -19,6 +20,55 @@
 **你的 Star 是我持续更新的动力！** 🚀
 
 [⭐ 点击 Star](https://github.com/88899/gitmen-lottery) | [🐛 报告问题](https://github.com/88899/gitmen-lottery/issues) | [💡 功能建议](https://github.com/88899/gitmen-lottery/issues/new)
+
+---
+
+## 🎉 新增 Cloudflare Workers 版本！
+
+现在提供两个版本供选择：
+
+| 版本 | 部署方式 | 费用 | 难度 | 推荐场景 |
+|------|---------|------|------|---------|
+| **Cloudflare Workers** ✨ | 无服务器 | **完全免费** | ⭐ 简单 | 无服务器，想要零成本运行 |
+| **Docker** | 自建服务器 | 服务器费用 | ⭐⭐⭐ 中等 | 已有服务器，需要完全控制 |
+
+### 🚀 Cloudflare Workers 版本（推荐新手）
+
+- ☁️ **无需服务器** - 完全托管在 Cloudflare 全球网络
+- 💰 **完全免费** - 使用 Cloudflare 免费套餐
+- ⚡ **5分钟部署** - 一条命令即可完成
+- 🌍 **全球加速** - Cloudflare CDN 加速
+- 🔄 **自动扩展** - 无需担心性能问题
+
+**快速开始：**
+```bash
+cd cloudflare-worker
+npm install
+npx wrangler login
+npm run deploy
+```
+
+📖 **详细文档：** [cloudflare-worker/部署指南.md](./cloudflare-worker/部署指南.md)
+
+### 🐳 Docker 版本（传统部署）
+
+- 🖥️ **完全控制** - 运行在自己的服务器上
+- 🔧 **高度定制** - 可以自由修改配置
+- 📊 **MySQL 数据库** - 使用传统关系型数据库
+
+**快速开始：**
+```bash
+cp .env.example .env
+nano .env  # 配置数据库和 Telegram
+cd deployment
+./deploy.sh
+```
+
+📖 **详细文档：** 见下方完整说明
+
+---
+
+**📋 版本对比详情：** [CLOUDFLARE_WORKER_VERSION.md](./CLOUDFLARE_WORKER_VERSION.md)
 
 ---
 
@@ -399,7 +449,7 @@ MIT License
 
 ---
 
-**版本**: 2.2.3  
+**版本**: 2.2.4  
 **更新日期**: 2025-11-15  
 **状态**: 🟢 生产就绪  
 **重要**: ⚠️ 使用前请阅读 [免责声明](DISCLAIMER.md)

@@ -1,5 +1,31 @@
 # 更新日志
 
+## [2.2.4] - 2025-11-15
+
+### 🔧 Docker 构建优化
+
+#### 修复 apt-get 安装失败问题
+- ✅ 优化 Dockerfile 错误处理
+- ✅ 新增 Dockerfile.cn（使用国内镜像源）
+- ✅ 新增 Dockerfile.minimal（最小化依赖）
+- ✅ 备份原始 Dockerfile 为 Dockerfile.original
+
+#### 部署脚本增强
+- ✅ 添加 Dockerfile 版本选择功能
+- ✅ 支持选择默认/国内/最小化版本
+- ✅ 自动备份和切换 Dockerfile
+
+#### 新增故障排查文档
+- ✅ deployment/TROUBLESHOOTING.md - 详细故障排查指南
+- ✅ deployment/QUICK_FIX.md - 快速修复指南
+- ✅ 涵盖常见错误和解决方案
+
+#### 优化内容
+- ✅ 分步安装系统依赖
+- ✅ 添加构建错误处理
+- ✅ 提供多种 Dockerfile 选择
+- ✅ 完善部署文档
+
 ## [2.2.3] - 2025-11-15
 
 ### 🧪 测试和项目结构优化
@@ -335,7 +361,7 @@ docs/
 
 ---
 
-**最新版本**: 2.2.3  
+**最新版本**: 2.2.4  
 **更新日期**: 2025-11-15  
 **状态**: 🟢 生产就绪  
 **重要**: ⚠️ 使用前请阅读 [DISCLAIMER.md](DISCLAIMER.md)  

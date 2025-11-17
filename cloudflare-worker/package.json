@@ -1,0 +1,24 @@
+{
+  "name": "lottery-prediction-worker",
+  "version": "1.0.0",
+  "description": "彩票预测系统 - Cloudflare Workers 版本（GitHub 自动部署）",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "tail": "wrangler tail"
+  },
+  "keywords": [
+    "lottery",
+    "prediction",
+    "cloudflare-workers",
+    "d1",
+    "kv",
+    "github-deploy"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.80.0"
+  }
+}
