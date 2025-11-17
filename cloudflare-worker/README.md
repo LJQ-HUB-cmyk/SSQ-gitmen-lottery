@@ -14,7 +14,8 @@
 
 ## 📋 快速开始
 
-> 💡 **部署遇到问题？** 查看 [DEPLOY.md](./DEPLOY.md) 获取详细的部署指南和故障排查
+> 💡 **3 步完成初始化** → [QUICKSTART.md](./QUICKSTART.md)  
+> 💡 **部署遇到问题？** → [DEPLOY.md](./DEPLOY.md)
 
 ### 1. 准备工作
 

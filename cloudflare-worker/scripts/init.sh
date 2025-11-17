@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# 自动初始化脚本
-# 用于首次运行时分批导入历史数据
+# 彩票数据初始化脚本
+# 功能：批量导入历史数据，支持断点续传，自动管理每日请求限制
 
 # 获取脚本所在目录
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -10,21 +10,22 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 # 加载 .env 配置文件
 ENV_FILE="$PROJECT_DIR/.env"
 if [ -f "$ENV_FILE" ]; then
-  echo "📝 加载配置文件: $ENV_FILE"
-  # 使用 export 导出环境变量
   set -a
   source "$ENV_FILE"
   set +a
 else
   echo "❌ 错误：未找到配置文件 $ENV_FILE"
-  echo "💡 请复制 .env.example 为 .env 并填写配置"
+  echo "💡 请先配置："
   echo "   cp $PROJECT_DIR/.env.example $PROJECT_DIR/.env"
+  echo "   vim $PROJECT_DIR/.env"
   exit 1
 fi
 
-# 配置
-MAX_ITERATIONS=50  # 最多执行 50 次
-SLEEP_TIME=120     # 每次间隔 120 秒（2 分钟）
+# 配置（可在 .env 文件中覆盖）
+SLEEP_TIME=${SLEEP_TIME:-120}
+MAX_NO_NEW_DATA=3
+DAILY_REQUEST_LIMIT=${DAILY_REQUEST_LIMIT:-500}
+AUTO_CONTINUE=${AUTO_CONTINUE:-false}  # 是否自动跨天继续
 
 # 设置代理
 if [ "$USE_PROXY" = "true" ]; then
@@ -33,27 +34,106 @@ if [ "$USE_PROXY" = "true" ]; then
   echo "🔧 使用代理: 127.0.0.1:$PROXY_PORT"
 fi
 
-echo "🚀 开始自动初始化..."
+echo ""
+echo "🚀 彩票数据初始化"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Worker URL: $WORKER_URL"
-echo "最多执行: $MAX_ITERATIONS 次"
-echo "每次间隔: $SLEEP_TIME 秒"
+echo "每日限制: $DAILY_REQUEST_LIMIT 次"
+echo "爬取间隔: $SLEEP_TIME 秒"
+echo "自动跨天: $([ "$AUTO_CONTINUE" = "true" ] && echo "是" || echo "否")"
 echo ""
 
 # 检查配置
-if [ "$WORKER_URL" = "https://your-worker.workers.dev" ]; then
-  echo "❌ 错误：请先修改脚本中的 WORKER_URL"
+if [ "$WORKER_URL" = "https://your-worker.workers.dev" ] || [ -z "$WORKER_URL" ]; then
+  echo "❌ 错误：请先配置 WORKER_URL"
   exit 1
 fi
 
-if [ "$API_KEY" = "your-api-key" ]; then
-  echo "❌ 错误：请先修改脚本中的 API_KEY"
+if [ "$API_KEY" = "your-api-key" ] || [ -z "$API_KEY" ]; then
+  echo "❌ 错误：请先配置 API_KEY"
   exit 1
 fi
 
-# 执行初始化
-for i in $(seq 1 $MAX_ITERATIONS); do
+# 初始化计数器
+iteration=0
+no_new_data_count=0
+last_total=0
+today=$(date '+%Y-%m-%d')
+request_count_file="/tmp/lottery_init_count_${today}.txt"
+
+# 读取今天已经执行的次数
+if [ -f "$request_count_file" ]; then
+  today_requests=$(cat "$request_count_file")
+else
+  today_requests=0
+fi
+
+echo "📊 今日已执行: $today_requests/$DAILY_REQUEST_LIMIT 次"
+echo ""
+
+# 主循环
+while true; do
+  # 检查日期是否变化（跨天）
+  current_date=$(date '+%Y-%m-%d')
+  if [ "$current_date" != "$today" ]; then
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "📅 日期变更: $today → $current_date"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    today=$current_date
+    today_requests=0
+    request_count_file="/tmp/lottery_init_count_${today}.txt"
+    echo "✅ 重置今日请求计数器"
+    echo ""
+  fi
+  
+  iteration=$((iteration + 1))
+  today_requests=$((today_requests + 1))
+  
+  # 检查是否达到每日限制
+  if [ "$today_requests" -gt "$DAILY_REQUEST_LIMIT" ]; then
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "⏸️  已达到今日请求限制"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "📊 今日统计："
+    echo "   执行次数: $today_requests 次"
+    echo "   数据库数据量: $last_total 条"
+    echo ""
+    
+    # 保存今日请求次数
+    echo "$today_requests" > "$request_count_file"
+    
+    if [ "$AUTO_CONTINUE" = "true" ]; then
+      # 自动跨天继续
+      tomorrow=$(date -v+1d '+%Y-%m-%d 00:00:00' 2>/dev/null || date -d 'tomorrow 00:00:00' '+%Y-%m-%d %H:%M:%S')
+      now=$(date '+%s')
+      tomorrow_ts=$(date -j -f '%Y-%m-%d %H:%M:%S' "$tomorrow" '+%s' 2>/dev/null || date -d "$tomorrow" '+%s')
+      wait_seconds=$((tomorrow_ts - now))
+      wait_hours=$((wait_seconds / 3600))
+      wait_minutes=$(((wait_seconds % 3600) / 60))
+      
+      echo "⏰ 将在 $wait_hours 小时 $wait_minutes 分钟后（明天 00:00）自动继续"
+      echo "   （按 Ctrl+C 可停止）"
+      echo ""
+      
+      sleep $wait_seconds
+      continue
+    else
+      # 手动模式，停止并提示
+      echo "💡 建议："
+      echo "  1. 明天再次运行此脚本继续爬取"
+      echo "  2. 或在 .env 中设置 AUTO_CONTINUE=true 自动跨天继续"
+      echo "  3. 或调整 DAILY_REQUEST_LIMIT（当前: $DAILY_REQUEST_LIMIT）"
+      echo ""
+      exit 0
+    fi
+  fi
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "📊 执行第 $i 次..."
+  echo "📊 执行第 $iteration 次..."
+  echo "时间: $(date '+%Y-%m-%d %H:%M:%S')"
   echo ""
   
   # 调用 /init API（全量爬取模式）
@@ -75,33 +155,66 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     echo "✅ 本批次成功"
     echo "   新增: $inserted 条"
     echo "   跳过: $skipped 条"
-    echo "   总计: $total 条"
+    echo "   当前总计: $total 条"
     
-    # 如果跳过的数量等于批次大小，说明这批数据都已存在
-    # 可能已经爬取完成
-    if [ "$skipped" -ge 90 ] && [ "$inserted" -le 10 ]; then
+    # 检查是否有新数据
+    if [ "$total" -eq "$last_total" ] || [ "$inserted" -eq 0 ]; then
+      no_new_data_count=$((no_new_data_count + 1))
       echo ""
-      echo "⚠️  本批次大部分数据已存在（跳过 $skipped 条）"
-      echo "可能已经爬取完成，或者需要爬取更早的数据"
+      echo "⚠️  本批次没有新增数据（连续 $no_new_data_count 次）"
+      
+      # 如果连续多次没有新数据，说明可能已经爬完
+      if [ "$no_new_data_count" -ge "$MAX_NO_NEW_DATA" ]; then
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "🎉 数据爬取完成！"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+        echo "📊 最终统计："
+        echo "   总执行次数: $iteration 次"
+        echo "   数据库总数据量: $total 条"
+        echo ""
+        
+        # 获取详细统计
+        stats=$(curl -s "$WORKER_URL/stats")
+        echo "📈 详细统计："
+        echo "$stats" | jq '.' 2>/dev/null || echo "$stats"
+        echo ""
+        
+        echo "✅ 所有历史数据已成功导入！"
+        exit 0
+      fi
+    else
+      # 有新数据，重置计数器
+      no_new_data_count=0
+      last_total=$total
       echo ""
-      echo "建议："
-      echo "  1. 检查数据量是否足够：curl -s \"$WORKER_URL/stats\" | jq '.total_count'"
-      echo "  2. 如果数据量 < 1000，继续运行此脚本"
-      echo "  3. 如果数据量 >= 1000，可以停止"
+      echo "✅ 本批次新增 $inserted 条数据，继续爬取..."
+    fi
+    
+    # 如果数据量已经很大，提示用户
+    if [ "$total" -ge 3000 ]; then
+      echo ""
+      echo "💡 提示：数据库已有 $total 条数据（双色球从2003年开始，约有3000+期）"
+      echo "   如果数据量接近历史总期数，可能即将完成"
     fi
   else
     echo "⚠️  本批次可能失败，继续尝试..."
+    
+    # 检查是否是认证错误
+    if echo "$response" | grep -q "Unauthorized"; then
+      echo ""
+      echo "❌ 认证失败！请检查 .env 文件中的 API_KEY 是否正确"
+      exit 1
+    fi
   fi
   
-  # 如果不是最后一次，等待
-  if [ $i -lt $MAX_ITERATIONS ]; then
-    echo ""
-    echo "⏳ 等待 $SLEEP_TIME 秒后继续..."
-    sleep $SLEEP_TIME
-  fi
+  # 保存今日请求次数
+  echo "$today_requests" > "$request_count_file"
+  
+  echo ""
+  echo "⏳ 等待 $SLEEP_TIME 秒后继续..."
+  echo "   本次会话: 第 $iteration 次 | 今日总计: $today_requests/$DAILY_REQUEST_LIMIT 次"
+  echo "   （按 Ctrl+C 可随时停止）"
+  sleep $SLEEP_TIME
 done
-
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "⚠️  已执行 $MAX_ITERATIONS 次"
-echo "💡 如果数据还未完整，请再次运行此脚本"
