@@ -1,5 +1,22 @@
 # 更新日志
 
+## [2.0.1] - 2025-11-17
+
+### 🐛 Bug 修复
+
+#### /init 接口错误修复
+- 修复 `Cannot read properties of undefined (reading 'duration')` 错误
+- 将 `db.exec()` 改为 `prepare().run()`
+- 改进错误处理
+
+**影响范围**：
+- Cloudflare Worker 版本的 `/init` 接口
+
+**修复文件**：
+- `cloudflare-worker/src/utils/database.js`
+
+---
+
 ## [2.0.0] - 2025-11-17
 
 ### 🎉 重大更新
