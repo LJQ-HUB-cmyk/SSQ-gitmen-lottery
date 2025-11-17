@@ -10,17 +10,12 @@ ENVIRONMENT = "production"
 [[d1_databases]]
 binding = "DB"
 database_name = "lottery_db"
-database_id = "01343890-8135-492e-b9c5-34b57a4532e1"  # 在 Cloudflare Dashboard 创建 D1 数据库后填写
+database_id = "01343890-8135-492e-b9c5-34b57a4532e1"
 
 # KV 命名空间绑定（用于存储配置）
 [[kv_namespaces]]
 binding = "KV_BINDING"
-id = "60a5e4f34c4e46e9aedcf7a3cb4d52ea"  # 在 Cloudflare Dashboard 创建 KV 命名空间后填写
-
-# R2 存储绑定（用于数据备份，可选）
-[[r2_buckets]]
-binding = "R2"
-bucket_name = "lottery-data"
+id = "60a5e4f34c4e46e9aedcf7a3cb4d52ea"
 
 # 说明：
 # 1. 定时任务通过 Cloudflare Dashboard 的触发器配置
@@ -28,4 +23,3 @@ bucket_name = "lottery-data"
 #    - TELEGRAM_BOT_TOKEN
 #    - TELEGRAM_CHAT_ID
 #    - API_KEY
-# 3. 通过 GitHub 连接到 Cloudflare Workers 自动部署

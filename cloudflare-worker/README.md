@@ -7,13 +7,13 @@
 - 🚀 无服务器部署 - 基于 Cloudflare Workers
 - 📊 D1 数据库 - SQLite 存储历史数据
 - 🔐 KV 配置管理 - 安全存储敏感信息
-- 💾 R2 自动备份 - 数据备份到对象存储
 - 📱 Telegram 通知 - 实时推送开奖和预测结果
 - 🛡️ 防封禁策略 - 随机延迟，模拟人类行为
-- 🔄 GitHub 自动部署 - 推送代码自动更新
 - 💰 完全免费 - 使用 Cloudflare 免费套餐
 
 ## 📋 快速开始
+
+> 💡 **部署遇到问题？** 查看 [DEPLOY.md](./DEPLOY.md) 获取详细的部署指南和故障排查
 
 ### 1. 准备工作
 
@@ -41,9 +41,7 @@
 2. 名称：`lottery-config`
 3. 复制 `id`，填入 `wrangler.toml`
 
-#### R2 存储桶（可选）
-1. R2 > Create bucket
-2. 名称：`lottery-data`
+
 
 ### 3. 配置 KV 存储
 
@@ -76,19 +74,19 @@ binding = "CONFIG"
 id = "你的kv_id"  # 填写这里
 ```
 
-### 5. 连接 GitHub
+### 5. 部署 Worker
 
-1. 将代码推送到 GitHub 仓库
-2. 在 Cloudflare Dashboard：
-   - Workers & Pages > Create application
-   - Pages > Connect to Git
-   - 选择你的 GitHub 仓库
-   - 构建配置：
-     - 构建命令：留空
-     - 构建输出目录：`cloudflare-worker`
-     - 根目录：`cloudflare-worker`
-3. 点击 "Save and Deploy"
-4. 等待部署完成，记录 Worker URL
+```bash
+cd cloudflare-worker
+
+# 登录 Cloudflare
+npx wrangler login
+
+# 部署
+npx wrangler deploy
+```
+
+部署成功后，记录 Worker URL
 
 ### 6. 初始化数据库
 
@@ -209,13 +207,8 @@ database_id = ""  # 填写你的 database_id
 
 # KV 命名空间绑定
 [[kv_namespaces]]
-binding = "CONFIG"
+binding = "KV_BINDING"
 id = ""  # 填写你的 KV id
-
-# R2 存储绑定（可选）
-[[r2_buckets]]
-binding = "R2"
-bucket_name = "lottery-data"
 ```
 
 ### KV 配置项
@@ -324,7 +317,55 @@ npm run tail
 ⚠️ 仅供参考，理性购彩
 ```
 
+## 🔧 部署故障排查
+
+### 部署失败：`error occurred while running deploy command`
+
+**原因**：使用 Pages 部署但配置不正确
+
+**解决方案**：
+
+**方法 1: 使用本地部署（最简单）**
+```bash
+cd cloudflare-worker
+npx wrangler login
+npx wrangler deploy
+```
+
+**方法 2: 修正 Pages 配置**
+1. 在 Cloudflare Pages 设置中：
+   - 构建命令：留空
+   - 构建输出目录：留空
+   - 根目录：`cloudflare-worker`
+2. 在 Settings > Functions 中添加绑定（不要在 wrangler.toml 中配置）：
+   - D1: 绑定名 `DB`，选择数据库
+   - KV: 绑定名 `CONFIG`，选择命名空间
+   - R2: 绑定名 `R2`，选择存储桶
+3. 重新部署
+
+### 绑定错误
+
+**问题**：`wrangler.toml` 中的 `database_id` 或 `id` 为空
+
+**解决**：
+1. 在 Cloudflare Dashboard 创建资源
+2. 复制 ID 填入 `wrangler.toml`
+3. 或在 Pages Settings > Functions 中配置绑定
+
 ## ❓ 常见问题
+
+### Q: 应该用 Pages 还是 Workers？
+
+A: 
+- **本地部署**：使用 `wrangler deploy`，部署为 Worker
+- **GitHub 自动部署**：使用 Pages，但需要在 Dashboard 配置绑定
+
+### Q: 部署失败怎么办？
+
+A: 
+1. 优先使用本地部署：`npx wrangler deploy`
+2. 如果使用 Pages，确保在 Settings > Functions 中配置了所有绑定
+3. 查看 Cloudflare Dashboard 的部署日志
 
 ### Q: 如何修改定时任务时间？
 
@@ -349,6 +390,15 @@ A: 检查：
 1. URL 是否正确
 2. Authorization Header 是否正确
 3. API_KEY 是否匹配
+4. 触发器是否已启用
+
+### Q: KV 配置不生效？
+
+A: 检查：
+1. KV 命名空间是否已创建
+2. KV `id` 是否已填入 `wrangler.toml`
+3. KV 绑定名称是否为 `CONFIG`
+4. KV 中的配置项是否已添加
 
 ### Q: 如何备份数据？
 

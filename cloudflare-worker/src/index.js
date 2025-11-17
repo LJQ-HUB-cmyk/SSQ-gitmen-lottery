@@ -15,9 +15,9 @@ import { Database } from './utils/database.js';
  */
 async function getConfig(env) {
   const config = {
-    telegramBotToken: await env.CONFIG.get('TELEGRAM_BOT_TOKEN'),
-    telegramChatId: await env.CONFIG.get('TELEGRAM_CHAT_ID'),
-    apiKey: await env.CONFIG.get('API_KEY')
+    telegramBotToken: await env.KV_BINDING.get('TELEGRAM_BOT_TOKEN'),
+    telegramChatId: await env.KV_BINDING.get('TELEGRAM_CHAT_ID'),
+    apiKey: await env.KV_BINDING.get('API_KEY')
   };
   
   // 如果 KV 中没有配置，尝试从环境变量获取（兼容性）
@@ -65,17 +65,6 @@ async function runDailyTask(env) {
     // 保存到数据库
     await db.insert('ssq', latestData);
     console.log(`新数据已保存: ${latestData.lottery_no}`);
-    
-    // 备份到 R2（可选）
-    if (env.R2) {
-      try {
-        const backupKey = `ssq/${latestData.lottery_no}.json`;
-        await env.R2.put(backupKey, JSON.stringify(latestData, null, 2));
-        console.log(`数据已备份到 R2: ${backupKey}`);
-      } catch (e) {
-        console.error('R2 备份失败:', e);
-      }
-    }
     
     // 2. 预测下一期
     console.log('开始预测下一期...');
