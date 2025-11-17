@@ -217,66 +217,22 @@ export default {
         const oldest = await db.getOldest('ssq');
         let allData = [];
         
-        // 优先使用中彩网（按日期范围查询）
+        // 使用 500.com 作为主数据源（更稳定）
         try {
           if (oldest) {
-            // 如果数据库有数据，从最旧的日期往前推 3 个月
-            const oldestDate = new Date(oldest.draw_date);
-            
-            // 结束日期：最旧记录的前一天
-            const endDate = new Date(oldestDate);
-            endDate.setDate(endDate.getDate() - 1);
-            
-            // 开始日期：往前推 3 个月
-            const startDate = new Date(endDate);
-            startDate.setMonth(startDate.getMonth() - 3);
-            
-            const startDateStr = startDate.toISOString().split('T')[0];
-            const endDateStr = endDate.toISOString().split('T')[0];
-            
             console.log(`数据库最旧记录: ${oldest.lottery_no} (${oldest.draw_date})`);
-            console.log(`使用中彩网查询日期范围: ${startDateStr} 至 ${endDateStr}`);
-            
-            allData = await spider.fetchByDateRangeFromZhcw(startDateStr, endDateStr);
-            console.log(`从中彩网获取到 ${allData.length} 条数据`);
-          } else {
-            // 如果数据库为空，获取最近 3 个月的数据
-            const endDate = new Date();
-            const startDate = new Date();
-            startDate.setMonth(startDate.getMonth() - 3);
-            
-            const startDateStr = startDate.toISOString().split('T')[0];
-            const endDateStr = endDate.toISOString().split('T')[0];
-            
-            console.log(`数据库为空，使用中彩网查询最近 3 个月数据`);
-            console.log(`查询日期范围: ${startDateStr} 至 ${endDateStr}`);
-            
-            allData = await spider.fetchByDateRangeFromZhcw(startDateStr, endDateStr);
-            console.log(`从中彩网获取到 ${allData.length} 条数据`);
-          }
-        } catch (zhcwError) {
-          // 中彩网失败，使用 500.com
-          console.log(`中彩网失败: ${zhcwError.message}`);
-          console.log(`切换到 500.com 数据源...`);
-          
-          try {
-            // 重新查询数据库最旧记录（可能在中彩网失败前已经插入了部分数据）
-            const currentOldest = await db.getOldest('ssq');
-            
-            if (currentOldest) {
-              console.log(`当前数据库最旧记录: ${currentOldest.lottery_no} (${currentOldest.draw_date})`);
-              console.log(`使用 500.com 从该期号往前爬取 50 期...`);
-              allData = await spider.fetchAllFrom500(50, currentOldest.lottery_no);
-            } else {
-              console.log(`数据库仍为空，使用 500.com 获取最新 50 期...`);
-              allData = await spider.fetchAllFrom500(50);
-            }
-            
+            console.log(`使用 500.com 从该期号往前爬取 50 期...`);
+            allData = await spider.fetchAllFrom500(50, oldest.lottery_no);
             console.log(`从 500.com 获取到 ${allData.length} 条数据`);
-          } catch (com500Error) {
-            console.log(`500.com 也失败: ${com500Error.message}`);
-            allData = [];
+          } else {
+            console.log(`数据库为空，使用 500.com 获取最新 50 期...`);
+            allData = await spider.fetchAllFrom500(50);
+            console.log(`从 500.com 获取到 ${allData.length} 条数据`);
           }
+        } catch (error) {
+          console.error(`500.com 失败: ${error.message}`);
+          console.error(`错误堆栈: ${error.stack}`);
+          allData = [];
         }
         
         if (allData.length === 0) {
