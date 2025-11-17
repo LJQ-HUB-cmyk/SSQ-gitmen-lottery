@@ -319,7 +319,17 @@ export class SSQSpider {
         // 比较期号：如果数据库最旧期号比 API 最旧期号还要旧，说明已经爬完了
         if (parseInt(startIssue) <= parseInt(oldestInList)) {
           console.log(`数据库最旧期号 ${startIssue} <= API 最旧期号 ${oldestInList}，可能已爬取完成`);
-          return [];
+          return {
+            success: false,
+            message: '未获取到数据',
+            source: '中彩网',
+            params: {
+              startIssue: startIssue,
+              oldestInList: oldestInList,
+              maxCount: maxCount
+            },
+            total: 0
+          };
         }
         
         // 否则，数据库最旧期号比 API 最旧期号新，说明中间有数据缺失
@@ -333,7 +343,16 @@ export class SSQSpider {
         
         if (remainingIssues.length === 0) {
           console.log(`没有更早的数据了，可能已爬取完成`);
-          return [];
+          return {
+            success: false,
+            message: '未获取到数据',
+            source: '中彩网',
+            params: {
+              startIssue: startIssue,
+              maxCount: maxCount
+            },
+            total: 0
+          };
         }
         
         issues = remainingIssues.slice(0, maxCount || remainingIssues.length);
@@ -454,7 +473,17 @@ export class SSQSpider {
         // 检查是否已经到达双色球开始年份（2003年）
         if (endYear < 2003) {
           console.log(`已到达双色球开始年份（2003年），无法继续往前`);
-          return [];
+          return {
+            success: false,
+            message: '未获取到数据',
+            source: '500.com',
+            params: {
+              startIssue: startIssue,
+              endYear: endYear,
+              reason: '已到达双色球开始年份（2003年）'
+            },
+            total: 0
+          };
         }
       }
       
@@ -510,7 +539,17 @@ export class SSQSpider {
     
     if (!data || data.length === 0) {
       console.log('500.com 未返回数据');
-      return [];
+      return {
+        success: false,
+        message: '未获取到数据',
+        source: '500.com',
+        params: {
+          url: url,
+          start: startIssue500,
+          end: endIssue500
+        },
+        total: 0
+      };
     }
     
     console.log(`从 500.com 获取到 ${data.length} 条数据`);
