@@ -483,9 +483,13 @@ export class SSQSpider {
       console.log(`获取最新数据，查询 ${startIssue500} - ${endIssue500}`);
     }
     
-    console.log(`500.com 查询期号范围: ${startIssue500} - ${endIssue500}`);
-    
     const url = `${this.backup500Url}?start=${startIssue500}&end=${endIssue500}`;
+    
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`📊 数据源: 500.com`);
+    console.log(`🔗 URL: ${url}`);
+    console.log(`📝 参数: start=${startIssue500}, end=${endIssue500}`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     
     const response = await fetch(url, {
       headers: {
@@ -645,7 +649,15 @@ export class SSQSpider {
           _: timestamp.toString()
         });
 
-        const response = await fetch(`${this.apiUrl}?${params}`, {
+        const url = `${this.apiUrl}?${params}`;
+        
+        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+        console.log(`📊 数据源: 中彩网`);
+        console.log(`🔗 URL: ${url}`);
+        console.log(`📝 参数: startDate=${startDate}, endDate=${endDate}, pageNum=${pageNum}, pageSize=${pageSize}`);
+        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+
+        const response = await fetch(url, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Referer': 'https://www.zhcw.com/',
