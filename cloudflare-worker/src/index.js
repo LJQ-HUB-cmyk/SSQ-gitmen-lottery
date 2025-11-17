@@ -217,32 +217,116 @@ export default {
         const oldest = await db.getOldest('ssq');
         let allData = [];
         
-        // 使用 500.com 作为数据源
+        // 优先使用中彩网，失败时使用 500.com
         console.log(`\n========================================`);
         console.log(`🎯 开始爬取数据`);
         console.log(`========================================`);
         
-        if (oldest) {
-          console.log(`📦 数据库状态: 有数据`);
-          console.log(`📌 最旧记录: ${oldest.lottery_no} (${oldest.draw_date})`);
-          console.log(`🎲 策略: 从该期号往前爬取 50 期`);
-          console.log(`========================================\n`);
+        let dataSource = '中彩网';
+        let queryParams = {};
+        
+        try {
+          if (oldest) {
+            // 从最旧日期往前推 3 个月
+            const oldestDate = new Date(oldest.draw_date);
+            const endDate = new Date(oldestDate);
+            endDate.setDate(endDate.getDate() - 1);
+            const startDate = new Date(endDate);
+            startDate.setMonth(startDate.getMonth() - 3);
+            
+            const startDateStr = startDate.toISOString().split('T')[0];
+            const endDateStr = endDate.toISOString().split('T')[0];
+            
+            console.log(`📦 数据库状态: 有数据`);
+            console.log(`📌 最旧记录: ${oldest.lottery_no} (${oldest.draw_date})`);
+            console.log(`🎲 策略: 从 ${startDateStr} 至 ${endDateStr}`);
+            console.log(`========================================\n`);
+            
+            queryParams = { startDate: startDateStr, endDate: endDateStr };
+            
+            allData = await spider.fetchByDateRangeFromZhcw(startDateStr, endDateStr);
+            
+            console.log(`\n========================================`);
+            console.log(`✅ 中彩网爬取完成: 获取到 ${allData.length} 条数据`);
+            console.log(`========================================\n`);
+          } else {
+            // 获取最近 3 个月
+            const endDate = new Date();
+            const startDate = new Date();
+            startDate.setMonth(startDate.getMonth() - 3);
+            
+            const startDateStr = startDate.toISOString().split('T')[0];
+            const endDateStr = endDate.toISOString().split('T')[0];
+            
+            console.log(`📦 数据库状态: 空`);
+            console.log(`🎲 策略: 获取最近 3 个月 (${startDateStr} 至 ${endDateStr})`);
+            console.log(`========================================\n`);
+            
+            queryParams = { startDate: startDateStr, endDate: endDateStr };
+            
+            allData = await spider.fetchByDateRangeFromZhcw(startDateStr, endDateStr);
+            
+            console.log(`\n========================================`);
+            console.log(`✅ 中彩网爬取完成: 获取到 ${allData.length} 条数据`);
+            console.log(`========================================\n`);
+          }
+        } catch (zhcwError) {
+          console.error(`\n❌ 中彩网失败: ${zhcwError.message}`);
+          console.error(`   查询参数: startDate=${queryParams.startDate}, endDate=${queryParams.endDate}`);
+          console.error(`   错误堆栈: ${zhcwError.stack}`);
+          console.log(`\n🔄 切换到 500.com...\n`);
           
-          allData = await spider.fetchAllFrom500(50, oldest.lottery_no);
+          dataSource = '500.com';
           
-          console.log(`\n========================================`);
-          console.log(`✅ 爬取完成: 获取到 ${allData.length} 条数据`);
-          console.log(`========================================\n`);
-        } else {
-          console.log(`📦 数据库状态: 空`);
-          console.log(`🎲 策略: 获取最新 50 期`);
-          console.log(`========================================\n`);
-          
-          allData = await spider.fetchAllFrom500(50);
-          
-          console.log(`\n========================================`);
-          console.log(`✅ 爬取完成: 获取到 ${allData.length} 条数据`);
-          console.log(`========================================\n`);
+          try {
+            const currentOldest = await db.getOldest('ssq');
+            
+            if (currentOldest) {
+              console.log(`📌 当前最旧记录: ${currentOldest.lottery_no}`);
+              
+              const year = parseInt(currentOldest.lottery_no.substring(0, 4));
+              const yearPrefix = currentOldest.lottery_no.substring(2, 4);
+              const issueNum = parseInt(currentOldest.lottery_no.substring(4));
+              
+              let endNum = issueNum - 1;
+              let endYearPrefix = yearPrefix;
+              
+              if (endNum < 1) {
+                const endYear = year - 1;
+                endYearPrefix = endYear.toString().substring(2);
+                endNum = 153;
+              }
+              
+              const endIssue = endYearPrefix + endNum.toString().padStart(3, '0');
+              const startNum = Math.max(1, endNum - 49);
+              const startIssue = endYearPrefix + startNum.toString().padStart(3, '0');
+              
+              queryParams = { start: startIssue, end: endIssue };
+              console.log(`🎲 策略: 从期号 ${startIssue} 至 ${endIssue}`);
+              
+              allData = await spider.fetchAllFrom500(50, currentOldest.lottery_no);
+            } else {
+              console.log(`📦 数据库仍为空，获取最新 50 期`);
+              allData = await spider.fetchAllFrom500(50);
+              
+              if (allData.length > 0) {
+                const firstIssue = allData[0].lottery_no.substring(2);
+                const lastIssue = allData[allData.length - 1].lottery_no.substring(2);
+                queryParams = { start: lastIssue, end: firstIssue };
+                console.log(`🎲 实际获取: 从期号 ${lastIssue} 至 ${firstIssue}`);
+              }
+            }
+            
+            console.log(`\n========================================`);
+            console.log(`✅ 500.com 爬取完成: 获取到 ${allData.length} 条数据`);
+            console.log(`   查询参数: start=${queryParams.start}, end=${queryParams.end}`);
+            console.log(`========================================\n`);
+          } catch (com500Error) {
+            console.error(`\n❌ 500.com 也失败: ${com500Error.message}`);
+            console.error(`   查询参数: start=${queryParams.start}, end=${queryParams.end}`);
+            console.error(`   错误堆栈: ${com500Error.stack}`);
+            allData = [];
+          }
         }
         
         if (allData.length === 0) {
@@ -282,7 +366,9 @@ export default {
             message: '批量导入完成',
             inserted: result.inserted,
             skipped: result.skipped,
-            total: currentTotal
+            total: currentTotal,
+            dataSource: dataSource,
+            queryParams: queryParams
           }),
           {
             headers: { 'Content-Type': 'application/json; charset=utf-8' }

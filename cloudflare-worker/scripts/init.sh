@@ -150,12 +150,32 @@ while true; do
   skipped=$(echo "$response" | jq -r '.skipped // 0' 2>/dev/null)
   total=$(echo "$response" | jq -r '.total // 0' 2>/dev/null)
   
+  # 提取数据源和参数信息
+  dataSource=$(echo "$response" | jq -r '.dataSource // "未知"' 2>/dev/null)
+  queryParams=$(echo "$response" | jq -r '.queryParams // {}' 2>/dev/null)
+  
   # 检查是否成功
   if echo "$response" | grep -q '"success":true'; then
     echo "✅ 本批次成功"
     echo "   新增: $inserted 条"
     echo "   跳过: $skipped 条"
     echo "   当前总计: $total 条"
+    echo "   数据源: $dataSource"
+    
+    # 显示查询参数
+    if [ "$dataSource" = "500.com" ]; then
+      start=$(echo "$queryParams" | jq -r '.start // ""' 2>/dev/null)
+      end=$(echo "$queryParams" | jq -r '.end // ""' 2>/dev/null)
+      if [ -n "$start" ] && [ -n "$end" ]; then
+        echo "   查询参数: start=$start, end=$end"
+      fi
+    elif [ "$dataSource" = "中彩网" ]; then
+      startDate=$(echo "$queryParams" | jq -r '.startDate // ""' 2>/dev/null)
+      endDate=$(echo "$queryParams" | jq -r '.endDate // ""' 2>/dev/null)
+      if [ -n "$startDate" ] && [ -n "$endDate" ]; then
+        echo "   查询参数: startDate=$startDate, endDate=$endDate"
+      fi
+    fi
     
     # 检查是否有新数据
     if [ "$total" -eq "$last_total" ] || [ "$inserted" -eq 0 ]; then
