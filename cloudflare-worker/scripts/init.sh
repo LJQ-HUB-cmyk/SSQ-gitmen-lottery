@@ -3,15 +3,28 @@
 # 自动初始化脚本
 # 用于首次运行时分批导入历史数据
 
-# 配置
+# 获取脚本所在目录
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
+# 加载 .env 配置文件
+ENV_FILE="$PROJECT_DIR/.env"
+if [ -f "$ENV_FILE" ]; then
+  echo "📝 加载配置文件: $ENV_FILE"
+  # 使用 export 导出环境变量
+  set -a
+  source "$ENV_FILE"
+  set +a
+else
+  echo "❌ 错误：未找到配置文件 $ENV_FILE"
+  echo "💡 请复制 .env.example 为 .env 并填写配置"
+  echo "   cp $PROJECT_DIR/.env.example $PROJECT_DIR/.env"
+  exit 1
+fi
+
+# 配置
 MAX_ITERATIONS=50  # 最多执行 50 次
 SLEEP_TIME=120     # 每次间隔 120 秒（2 分钟）
-
-# 代理配置（如果需要）
-# 取消下面的注释并设置你的代理端口
-PROXY_PORT=7897
-USE_PROXY=true
 
 # 设置代理
 if [ "$USE_PROXY" = "true" ]; then

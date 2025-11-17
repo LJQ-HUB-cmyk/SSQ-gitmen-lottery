@@ -145,6 +145,29 @@ export class Database {
   }
 
   /**
+   * 获取最旧数据
+   */
+  async getOldest(table) {
+    const result = await this.db
+      .prepare(`
+        SELECT * FROM ${table}_lottery 
+        ORDER BY lottery_no ASC 
+        LIMIT 1
+      `)
+      .first();
+
+    if (!result) return null;
+
+    return {
+      lottery_no: result.lottery_no,
+      draw_date: result.draw_date,
+      red_balls: [result.red1, result.red2, result.red3, result.red4, result.red5, result.red6],
+      blue_ball: result.blue,
+      sorted_code: result.sorted_code
+    };
+  }
+
+  /**
    * 获取所有数据
    */
   async getAll(table, limit = 1000) {

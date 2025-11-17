@@ -60,7 +60,30 @@
 3. 输入 Key 和 Value
 4. 点击 "Add"
 
-### 4. 更新配置文件
+### 4. 配置脚本环境变量
+
+复制配置模板并填写你的配置：
+
+```bash
+cd cloudflare-worker
+cp .env.example .env
+```
+
+编辑 `.env` 文件：
+
+```bash
+# Cloudflare Worker 配置
+WORKER_URL=https://your-worker.workers.dev  # 填写你的 Worker URL
+API_KEY=your-api-key-here                   # 填写你的 API Key
+
+# 代理配置（可选）
+USE_PROXY=false
+PROXY_PORT=7897
+```
+
+> 💡 `.env` 文件已添加到 `.gitignore`，不会被提交到 Git，可以安全存储敏感信息。
+
+### 5. 更新 wrangler.toml
 
 编辑 `wrangler.toml`：
 
@@ -75,7 +98,7 @@ binding = "CONFIG"
 id = "你的kv_id"  # 填写这里
 ```
 
-### 5. 部署 Worker
+### 6. 部署 Worker
 
 ```bash
 cd cloudflare-worker
@@ -89,7 +112,7 @@ npx wrangler deploy
 
 部署成功后，记录 Worker URL
 
-### 6. 初始化数据库
+### 7. 初始化数据库
 
 #### 创建表结构
 在 D1 控制台执行 `schema.sql` 中的 SQL：

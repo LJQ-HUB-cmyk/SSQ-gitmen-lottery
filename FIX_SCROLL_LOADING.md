@@ -21,7 +21,27 @@
 
 ## 修复内容
 
-### 1. 修改 `SSQSpider.fetchAll()` 方法
+### 1. 添加 `Database.getOldest()` 方法
+
+**文件**: `cloudflare-worker/src/utils/database.js`
+
+添加获取数据库中最旧期号的方法：
+
+```javascript
+async getOldest(table) {
+  const result = await this.db
+    .prepare(`
+      SELECT * FROM ${table}_lottery 
+      ORDER BY lottery_no ASC 
+      LIMIT 1
+    `)
+    .first();
+  
+  return result ? { lottery_no: result.lottery_no, ... } : null;
+}
+```
+
+### 2. 修改 `SSQSpider.fetchAll()` 方法
 
 **文件**: `cloudflare-worker/src/spiders/ssq.js`
 
@@ -34,7 +54,7 @@ async fetchAll(maxCount = null, startIssue = null) {
 }
 ```
 
-### 2. 修改 `SSQSpider.fetchAllFromZhcw()` 方法
+### 3. 修改 `SSQSpider.fetchAllFromZhcw()` 方法
 
 **文件**: `cloudflare-worker/src/spiders/ssq.js`
 
@@ -52,7 +72,7 @@ async fetchAllFromZhcw(maxCount = null, startIssue = null) {
 }
 ```
 
-### 3. 修改 `/init` 接口
+### 4. 修改 `/init` 接口
 
 **文件**: `cloudflare-worker/src/index.js`
 

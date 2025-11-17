@@ -2,9 +2,24 @@
 
 # 测试连接脚本
 
-WORKER_URL="https://lottery-prediction.githubmen.workers.dev"
-API_KEY="6690_042:A644AEpYn_658"
+# 获取脚本所在目录
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
+# 加载 .env 配置文件
+ENV_FILE="$PROJECT_DIR/.env"
+if [ -f "$ENV_FILE" ]; then
+  echo "📝 加载配置文件: $ENV_FILE"
+  set -a
+  source "$ENV_FILE"
+  set +a
+else
+  echo "❌ 错误：未找到配置文件 $ENV_FILE"
+  echo "💡 请复制 .env.example 为 .env 并填写配置"
+  exit 1
+fi
+
+echo ""
 echo "🔍 测试 Cloudflare Worker 连接"
 echo "================================"
 echo ""
@@ -46,12 +61,13 @@ echo "--------------------------------"
 if command -v python3 &> /dev/null; then
   echo "使用 Python 测试连接..."
   
-  python3 << 'EOF'
+  python3 << EOF
 import urllib.request
 import json
+import os
 
-WORKER_URL = "https://lottery-prediction.githubmen.workers.dev"
-API_KEY = "6690_042:A644AEpYn_658"
+WORKER_URL = os.environ.get('WORKER_URL', 'https://lottery-prediction.githubmen.workers.dev')
+API_KEY = os.environ.get('API_KEY', '')
 
 print("\n1. 测试首页:")
 try:

@@ -3,17 +3,34 @@
 # 带代理的自动初始化脚本
 # 用于首次运行时分批导入历史数据
 
+# 获取脚本所在目录
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+# 加载 .env 配置文件
+ENV_FILE="$PROJECT_DIR/.env"
+if [ -f "$ENV_FILE" ]; then
+  echo "📝 加载配置文件: $ENV_FILE"
+  set -a
+  source "$ENV_FILE"
+  set +a
+else
+  echo "❌ 错误：未找到配置文件 $ENV_FILE"
+  echo "💡 请复制 .env.example 为 .env 并填写配置"
+  exit 1
+fi
+
 # 配置
-WORKER_URL="https://lottery-prediction.githubmen.workers.dev"
-API_KEY="6690_042:A644AEpYn_658"
-PROXY_PORT=7897
 MAX_ITERATIONS=50
 SLEEP_TIME=120
 
 # 设置代理
-export http_proxy="http://127.0.0.1:$PROXY_PORT"
-export https_proxy="http://127.0.0.1:$PROXY_PORT"
+if [ "$USE_PROXY" = "true" ]; then
+  export http_proxy="http://127.0.0.1:$PROXY_PORT"
+  export https_proxy="http://127.0.0.1:$PROXY_PORT"
+fi
 
+echo ""
 echo "🚀 开始自动初始化（使用代理）"
 echo "================================"
 echo "Worker URL: $WORKER_URL"
