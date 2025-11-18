@@ -439,11 +439,11 @@ export class SSQSpider {
 
   /**
    * 从 500.com 获取数据（备用）
-   * 支持按期号范围查询，每次获取 50 期
-   * @param {number} batchSize - 每批次获取的期数（默认 50）
+   * 支持按期号范围查询，每次获取 200 期（与 Python 版本一致）
+   * @param {number} batchSize - 每批次获取的期数（默认 200）
    * @param {string} startIssue - 起始期号（可选），格式如 "2025132"（7位）
    */
-  async fetchAllFrom500(batchSize = 50, startIssue = null) {
+  async fetchAllFrom500(batchSize = 200, startIssue = null) {
     console.log(`开始从 500.com 获取数据，每批 ${batchSize} 期${startIssue ? `，从期号 ${startIssue} 往前` : ''}...`);
     
     await this.randomDelay();

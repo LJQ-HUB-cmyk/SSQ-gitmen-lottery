@@ -118,11 +118,18 @@ class TelegramBot:
             for i, pred in enumerate(predictions[:5], 1):
                 red_balls = pred.get('red_balls', [])
                 blue_ball = pred.get('blue_ball', 0)
+                strategy_name = pred.get('strategy_name', '')
                 
                 red_str = ' '.join([f"{x:02d}" for x in red_balls])
                 blue_str = f"{blue_ball:02d}"
                 
-                message += f"<b>组合 {i}:</b>\n"
+                message += f"<b>组合 {i}:</b>"
+                
+                # 添加策略名称（如果有）
+                if strategy_name:
+                    message += f" <i>[{strategy_name}]</i>"
+                
+                message += "\n"
                 message += f"🔴 <code>{red_str}</code>\n"
                 message += f"🔵 <code>{blue_str}</code>\n\n"
             
@@ -174,11 +181,18 @@ class TelegramBot:
             for i, pred in enumerate(predictions[:3], 1):
                 pred_red = pred.get('red_balls', [])
                 pred_blue = pred.get('blue_ball', 0)
+                strategy_name = pred.get('strategy_name', '')
                 
                 pred_red_str = ' '.join([f"{x:02d}" for x in pred_red])
                 pred_blue_str = f"{pred_blue:02d}"
                 
-                message += f"<b>组合 {i}:</b>\n"
+                message += f"<b>组合 {i}:</b>"
+                
+                # 添加策略名称（如果有）
+                if strategy_name:
+                    message += f" <i>[{strategy_name}]</i>"
+                
+                message += "\n"
                 message += f"🔴 <code>{pred_red_str}</code>\n"
                 message += f"🔵 <code>{pred_blue_str}</code>\n\n"
             

@@ -1,35 +1,38 @@
 """
 双色球预测引擎
-基于历史中奖号码和专业彩票算法进行预测
+支持多种预测策略的组合使用
 """
 
 from core.base_predictor import BasePredictor, BaseStatistics
 from core.utils import has_consecutive_numbers, format_number
 import logging
-from typing import List, Tuple, Set
+from typing import List, Tuple, Set, Dict
 from collections import Counter
 import itertools
 from datetime import datetime
+from .strategies import get_strategy, get_all_strategies
 
 logger = logging.getLogger(__name__)
 
 
 class SSQPredictor(BasePredictor):
-    """双色球预测类"""
+    """双色球预测类（支持策略模式）"""
 
     RED_RANGE = range(1, 34)  # 红球范围 1-33
     BLUE_RANGE = range(1, 17)  # 蓝球范围 1-16
     RED_COUNT = 6  # 红球个数
 
-    def __init__(self, lottery_data: List[dict]):
+    def __init__(self, lottery_data: List[dict], strategies: List[str] = None):
         """
         初始化预测器
 
         Args:
             lottery_data: 历史中奖数据列表
+            strategies: 使用的策略列表（默认 ['frequency']）
         """
         self.all_red_balls = set(self.RED_RANGE)
         self.all_blue_balls = set(self.BLUE_RANGE)
+        self.default_strategies = strategies or ['frequency']
         super().__init__(lottery_data)
 
     def _analyze_history(self):
@@ -176,32 +179,120 @@ class SSQPredictor(BasePredictor):
         logger.info(f"预测的蓝球: {top_blue_balls}")
         return top_blue_balls
 
-    def predict(self, red_count: int = 5, blue_count: int = 1) -> List[dict]:
+    def predict(self, count: int = 5, strategies: List[str] = None) -> List[dict]:
         """
-        完整预测
+        完整预测（支持多策略）
 
         Args:
-            red_count: 预测红球组合数
-            blue_count: 预测蓝球个数
+            count: 预测组合总数
+            strategies: 使用的策略列表（可选）
 
         Returns:
             预测结果列表
         """
-        predicted_red_balls = self.predict_red_balls(red_count)
-        predicted_blue_balls = self.predict_blue_ball(blue_count)
-
+        # 使用指定策略或默认策略
+        strategy_names = strategies or self.default_strategies
+        
+        logger.info(f"使用策略: {', '.join(strategy_names)}")
+        
+        # 构建上下文数据
+        context = {
+            'history_data': self.lottery_data,
+            'red_frequency': dict(self.red_ball_frequency),
+            'blue_frequency': dict(self.blue_ball_frequency),
+            'historical_combinations': self.historical_red_combinations
+        }
+        
+        # 计算每个策略生成的组合数
+        count_per_strategy = max(1, count // len(strategy_names))
+        
+        # 使用多个策略生成预测
         predictions = []
-        for i, red_balls in enumerate(predicted_red_balls):
-            for blue_ball in predicted_blue_balls:
+        
+        for strategy_name in strategy_names:
+            strategy_predictions = self._predict_with_strategy(
+                strategy_name,
+                count_per_strategy,
+                context,
+                predictions
+            )
+            predictions.extend(strategy_predictions)
+            
+            # 如果已经生成足够的组合，停止
+            if len(predictions) >= count:
+                break
+        
+        # 截取到指定数量
+        final_predictions = predictions[:count]
+        
+        # 添加排名
+        for i, pred in enumerate(final_predictions):
+            pred['rank'] = i + 1
+        
+        logger.info(f"生成了 {len(final_predictions)} 个预测组合")
+        return final_predictions
+    
+    def _predict_with_strategy(
+        self, 
+        strategy_name: str, 
+        count: int, 
+        context: Dict,
+        existing_predictions: List[dict]
+    ) -> List[dict]:
+        """使用指定策略生成预测
+        
+        Args:
+            strategy_name: 策略名称
+            count: 生成数量
+            context: 上下文数据
+            existing_predictions: 已生成的预测（用于去重）
+            
+        Returns:
+            预测结果列表
+        """
+        strategy = get_strategy(strategy_name)
+        predictions = []
+        max_attempts = count * 100  # 最多尝试次数
+        attempts = 0
+        
+        logger.info(f"使用 {strategy.name} 生成 {count} 个组合...")
+        
+        while len(predictions) < count and attempts < max_attempts:
+            attempts += 1
+            
+            # 使用策略生成红球和蓝球
+            red_balls = strategy.generate_red_balls(context)
+            blue_ball = strategy.generate_blue_ball(context)
+            
+            # 检查是否重复
+            sorted_code = tuple(sorted(red_balls))
+            
+            is_duplicate = (
+                sorted_code in context['historical_combinations'] or
+                any(tuple(sorted(p['red_balls'])) == sorted_code for p in existing_predictions) or
+                any(tuple(sorted(p['red_balls'])) == sorted_code for p in predictions)
+            )
+            
+            if not is_duplicate:
                 predictions.append({
-                    'rank': i + 1,
                     'red_balls': red_balls,
                     'blue_ball': blue_ball,
-                    'prediction_time': datetime.now().isoformat(),
-                    'description': f'预测组合 {i + 1}'
+                    'strategy': strategy_name,
+                    'strategy_name': strategy.name,
+                    'prediction_time': datetime.now().isoformat()
                 })
-
+        
+        logger.info(f"{strategy.name} 生成了 {len(predictions)} 个组合")
         return predictions
+    
+    @staticmethod
+    def get_available_strategies() -> List[dict]:
+        """获取所有可用策略
+        
+        Returns:
+            策略列表
+        """
+        return get_all_strategies()
 
 
 class SSQStatistics(BaseStatistics):

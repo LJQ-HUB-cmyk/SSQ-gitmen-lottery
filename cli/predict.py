@@ -3,8 +3,10 @@
 """
 
 import logging
+import os
 from core.config import LOG_DIR, LOTTERY_NAMES
 from core.utils import load_db_config
+from core.telegram_bot import TelegramBot
 
 logger = logging.getLogger(__name__)
 
@@ -50,11 +52,20 @@ def predict(lottery_type: str):
             
             logger.info(f"使用 {len(lottery_data)} 条历史数据进行预测")
             
-            # 创建预测器
-            predictor = SSQPredictor(lottery_data)
+            # 从环境变量读取配置
+            import os
+            default_strategies = os.getenv('DEFAULT_STRATEGIES', 'frequency').split(',')
+            default_strategies = [s.strip() for s in default_strategies]
+            default_count = int(os.getenv('DEFAULT_PREDICTION_COUNT', '5'))
             
-            # 预测红球和蓝球
-            predictions = predictor.predict(red_count=5, blue_count=1)
+            logger.info(f"使用策略: {', '.join(default_strategies)}")
+            logger.info(f"预测条数: {default_count}")
+            
+            # 创建预测器（使用配置的策略）
+            predictor = SSQPredictor(lottery_data, strategies=default_strategies)
+            
+            # 预测（使用配置的条数）
+            predictions = predictor.predict(count=default_count)
             
             # 显示预测结果
             logger.info("\n" + "=" * 60)
@@ -64,7 +75,13 @@ def predict(lottery_type: str):
             for i, pred in enumerate(predictions, 1):
                 red_str = ','.join([f"{x:02d}" for x in pred['red_balls']])
                 blue_str = f"{pred['blue_ball']:02d}"
-                logger.info(f"组合 {i}: 红球 {red_str} | 蓝球 {blue_str}")
+                strategy_name = pred.get('strategy_name', '')
+                
+                # 显示策略名称（如果有）
+                if strategy_name:
+                    logger.info(f"组合 {i} [{strategy_name}]: 红球 {red_str} | 蓝球 {blue_str}")
+                else:
+                    logger.info(f"组合 {i}: 红球 {red_str} | 蓝球 {blue_str}")
             
             # 显示统计信息
             logger.info("\n" + "=" * 60)
@@ -96,6 +113,27 @@ def predict(lottery_type: str):
                 logger.info(f"号码: {red_str} + {latest['blue_ball']:02d}")
             
             db.close()
+            
+            # 发送 Telegram 通知
+            logger.info("\n" + "=" * 60)
+            logger.info("发送 Telegram 通知")
+            logger.info("=" * 60)
+            
+            bot = TelegramBot()
+            
+            if not bot.bot_token or not bot.chat_id:
+                logger.warning("Telegram 未配置，跳过通知")
+            else:
+                # 测试连接
+                if not bot.test_connection():
+                    logger.error("Telegram 连接失败")
+                else:
+                    # 发送预测结果
+                    success = bot.send_prediction('ssq', predictions)
+                    if success:
+                        logger.info("✓ Telegram 预测发送成功")
+                    else:
+                        logger.error("✗ Telegram 预测发送失败")
             
         else:
             logger.error(f"暂不支持彩票类型: {lottery_type}")

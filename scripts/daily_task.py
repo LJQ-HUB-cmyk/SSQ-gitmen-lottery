@@ -81,14 +81,27 @@ def daily_task():
         
         logger.info(f"使用 {len(lottery_data)} 条历史数据进行预测")
         
-        predictor = SSQPredictor(lottery_data)
-        predictions = predictor.predict(red_count=5, blue_count=1)
+        # 从环境变量读取配置
+        default_strategies = os.getenv('DEFAULT_STRATEGIES', 'frequency').split(',')
+        default_strategies = [s.strip() for s in default_strategies]
+        default_count = int(os.getenv('DEFAULT_PREDICTION_COUNT', '5'))
+        
+        logger.info(f"使用策略: {', '.join(default_strategies)}")
+        logger.info(f"预测条数: {default_count}")
+        
+        predictor = SSQPredictor(lottery_data, strategies=default_strategies)
+        predictions = predictor.predict(count=default_count)
         
         logger.info(f"生成 {len(predictions)} 个预测组合")
         for i, pred in enumerate(predictions[:3], 1):
             red_str = ','.join([f"{x:02d}" for x in pred['red_balls']])
             blue_str = f"{pred['blue_ball']:02d}"
-            logger.info(f"组合 {i}: 红球 {red_str} | 蓝球 {blue_str}")
+            strategy_name = pred.get('strategy_name', '')
+            
+            if strategy_name:
+                logger.info(f"组合 {i} [{strategy_name}]: 红球 {red_str} | 蓝球 {blue_str}")
+            else:
+                logger.info(f"组合 {i}: 红球 {red_str} | 蓝球 {blue_str}")
         
         # 4. 统计信息
         logger.info("步骤 4: 生成统计信息")

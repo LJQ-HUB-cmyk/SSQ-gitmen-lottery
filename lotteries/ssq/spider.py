@@ -67,7 +67,7 @@ class SSQSpider:
     def fetch_latest(self, count: int = 1) -> List[Dict]:
         """获取最新开奖数据（支持自动切换数据源）
         
-        优先使用主数据源（中彩网），失败时自动切换到备用数据源（500.com）
+        优先使用主数据源（500.com），失败时自动切换到备用数据源（中彩网）
         
         Args:
             count: 要获取的期数（默认1期）
@@ -75,23 +75,23 @@ class SSQSpider:
         Returns:
             中奖数据列表
         """
-        # 先尝试主数据源（中彩网 API）
+        # 先尝试主数据源（500.com）
         try:
-            logger.info("尝试从主数据源（中彩网）获取最新数据...")
-            api_data = self.fetch_api_recent(max_count=count)
-            if api_data and len(api_data) > 0:
-                logger.info(f"主数据源成功获取 {len(api_data)} 条数据")
-                return api_data[:count]
+            logger.info("尝试从主数据源（500.com）获取最新数据...")
+            backup_data = self.fetch_latest_from_500com(count=count)
+            if backup_data and len(backup_data) > 0:
+                logger.info(f"主数据源成功获取 {len(backup_data)} 条数据")
+                return backup_data
         except Exception as e:
             logger.warning(f"主数据源失败: {e}")
         
-        # 主数据源失败，尝试备用数据源（500.com）
+        # 主数据源失败，尝试备用数据源（中彩网 API）
         try:
-            logger.info("尝试从备用数据源（500.com）获取最新数据...")
-            backup_data = self.fetch_latest_from_500com(count=count)
-            if backup_data and len(backup_data) > 0:
-                logger.info(f"备用数据源成功获取 {len(backup_data)} 条数据")
-                return backup_data
+            logger.info("尝试从备用数据源（中彩网）获取最新数据...")
+            api_data = self.fetch_api_recent(max_count=count)
+            if api_data and len(api_data) > 0:
+                logger.info(f"备用数据源成功获取 {len(api_data)} 条数据")
+                return api_data[:count]
         except Exception as backup_error:
             logger.error(f"备用数据源也失败: {backup_error}")
         
@@ -820,25 +820,26 @@ class SSQSpider:
             raise
 
     def fetch_500com_data(self, start_issue: str, end_issue: str) -> List[Dict]:
-        """从 500.com 获取历史数据（备选源，支持大范围查询）
+        """从 500.com 获取历史数据（支持期号范围查询）
         
-        注意：此方法已废弃，500.com 的期号范围查询不再可用
-        建议使用 fetch_latest_from_500com() 获取最近30期数据
+        用于全量爬取历史数据，支持按期号范围查询。
+        
+        注意：
+        - 期号格式为5位（如 05001 表示 2005年第1期）
+        - 适合批量获取历史数据
+        - 如只需最新数据，建议使用 fetch_latest_from_500com()
 
         Args:
-            start_issue: 开始期号
-            end_issue: 结束期号
+            start_issue: 开始期号（5位格式，如 '05001'）
+            end_issue: 结束期号（5位格式，如 '05200'）
 
         Returns:
             中奖数据列表
         """
-        logger.warning("fetch_500com_data 方法已废弃，500.com 的期号范围查询不再可用")
-        logger.info("建议使用 fetch_latest_from_500com() 获取最近30期数据")
-        
         all_results = []
         url = f'https://datachart.500.com/ssq/history/newinc/history.php?start={start_issue}&end={end_issue}'
 
-        logger.info(f"尝试从 500.com 获取数据: {start_issue} - {end_issue}")
+        logger.info(f"从 500.com 获取历史数据: {start_issue} - {end_issue}")
 
         try:
             response = self.session.get(url, headers=self.HEADERS, timeout=self.timeout)
@@ -864,6 +865,10 @@ class SSQSpider:
                     # 解析表格列
                     # 期号 | 红球1-6 | 蓝球 | 快乐星期天 | 奖池 | 一等奖注 | 一等奖金 | 二等奖注 | 二等奖金 | 投注额 | 开奖日期
                     lottery_no = tds[0].text.strip()
+                    
+                    # 补全期号：如果是5位数字，补全为7位（加上年份前缀20）
+                    if lottery_no and re.match(r'^\d{5}$', lottery_no):
+                        lottery_no = '20' + lottery_no
 
                     # 红球（前6列）
                     red_texts = [tds[i].text.strip() for i in range(1, 7)]

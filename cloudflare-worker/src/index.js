@@ -18,7 +18,8 @@ async function getConfig(env) {
     telegramBotToken: await env.KV_BINDING.get('TELEGRAM_BOT_TOKEN'),
     telegramChatId: await env.KV_BINDING.get('TELEGRAM_CHAT_ID'),
     apiKey: await env.KV_BINDING.get('API_KEY'),
-    defaultStrategies: await env.KV_BINDING.get('DEFAULT_STRATEGIES')
+    defaultStrategies: await env.KV_BINDING.get('DEFAULT_STRATEGIES'),
+    defaultPredictionCount: await env.KV_BINDING.get('DEFAULT_PREDICTION_COUNT')
   };
   
   // 如果 KV 中没有配置，尝试从环境变量获取（兼容性）
@@ -26,6 +27,7 @@ async function getConfig(env) {
   if (!config.telegramChatId) config.telegramChatId = env.TELEGRAM_CHAT_ID;
   if (!config.apiKey) config.apiKey = env.API_KEY;
   if (!config.defaultStrategies) config.defaultStrategies = env.DEFAULT_STRATEGIES || 'frequency';
+  if (!config.defaultPredictionCount) config.defaultPredictionCount = parseInt(env.DEFAULT_PREDICTION_COUNT || '5');
   
   return config;
 }
@@ -151,8 +153,8 @@ async function runDailyTask(env) {
     const result = await db.batchInsert('ssq', [latestOnline]);
     console.log(`入库完成: 新增 ${result.inserted} 条`);
     
-    // 预测下一期
-    const predictions = await predictor.predict(5);
+    // 预测下一期（使用配置的默认条数）
+    const predictions = await predictor.predict(config.defaultPredictionCount);
     
     // 获取统计信息
     const frequency = await db.getFrequency('ssq');
@@ -161,7 +163,8 @@ async function runDailyTask(env) {
       top_blue: frequency.blue.slice(0, 3)
     };
     
-    // 发送通知
+    // 发送通知（增量更新时发送）
+    console.log('发送 Telegram 通知（增量更新）');
     await telegram.sendDailyReport(latestOnline, predictions, stats);
     
     return {
@@ -264,7 +267,7 @@ export default {
             }
             
             const endIssue = endYearPrefix + endNum.toString().padStart(3, '0');
-            const startNum = Math.max(1, endNum - 49);
+            const startNum = Math.max(1, endNum - 199);  // 改为 200 期（0-199 = 200个）
             const startIssue = endYearPrefix + startNum.toString().padStart(3, '0');
             
             queryParams = { start: startIssue, end: endIssue };
@@ -272,7 +275,7 @@ export default {
             console.log(`🎲 策略: 从期号 ${startIssue} 至 ${endIssue}`);
             console.log(`========================================\n`);
             
-            allData = await spider.fetchAllFrom500(50, oldest.lottery_no);
+            allData = await spider.fetchAllFrom500(200, oldest.lottery_no);  // 改为 200 期
             
             // 检查返回值是否为有效数组
             if (!Array.isArray(allData)) {
@@ -305,10 +308,10 @@ export default {
             console.log(`========================================\n`);
           } else {
             console.log(`📦 数据库状态: 空`);
-            console.log(`🎲 策略: 获取最新 50 期`);
+            console.log(`🎲 策略: 获取最新 200 期`);
             console.log(`========================================\n`);
             
-            allData = await spider.fetchAllFrom500(50);
+            allData = await spider.fetchAllFrom500(200);  // 改为 200 期
             
             // 检查返回值是否为有效数组
             if (!Array.isArray(allData)) {
@@ -372,17 +375,8 @@ export default {
         
         console.log(`插入完成: 新增 ${result.inserted} 条，跳过 ${result.skipped} 条，当前总计 ${currentTotal} 条`);
         
-        // 发送通知
-        if (config.telegramBotToken && config.telegramChatId) {
-          const telegram = new TelegramBot(config.telegramBotToken, config.telegramChatId);
-          await telegram.sendMessage(
-            `✅ 批量导入完成\n\n` +
-            `新增: ${result.inserted} 条\n` +
-            `跳过: ${result.skipped} 条\n` +
-            `当前总计: ${currentTotal} 条\n\n` +
-            `💡 继续触发 /init 可导入更多历史数据`
-          );
-        }
+        // 注意：初始化不发送 Telegram 通知，只有增量更新和预测才发送
+        console.log('初始化完成，不发送 Telegram 通知');
         
         return new Response(
           JSON.stringify({
@@ -461,7 +455,10 @@ export default {
         const db = new Database(env.DB);
         
         // 获取参数
-        const count = parseInt(url.searchParams.get('count') || '5');
+        // 如果没有指定 count，使用配置的默认值
+        const countParam = url.searchParams.get('count');
+        const count = countParam ? parseInt(countParam) : config.defaultPredictionCount;
+        
         const strategiesParam = url.searchParams.get('strategies');
         
         // 解析策略参数（逗号分隔）

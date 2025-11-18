@@ -66,7 +66,14 @@ export class TelegramBot {
     message += '🔮 <b>下期预测</b>\n\n';
     
     predictions.slice(0, 3).forEach((pred, index) => {
-      message += `<b>组合 ${index + 1}:</b>\n`;
+      message += `<b>组合 ${index + 1}:</b>`;
+      
+      // 添加策略名称（如果有）
+      if (pred.strategy_name) {
+        message += ` <i>[${pred.strategy_name}]</i>`;
+      }
+      
+      message += `\n`;
       message += `🔴 <code>${pred.red_balls.join(' ')}</code>\n`;
       message += `🔵 <code>${pred.blue_ball}</code>\n\n`;
     });

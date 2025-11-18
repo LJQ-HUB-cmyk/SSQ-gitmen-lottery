@@ -53,6 +53,8 @@ export class SSQPredictor {
       // 计算每个策略生成的组合数
       const countPerStrategy = this.countPerStrategy || Math.ceil(count / strategyNames.length);
       
+      console.log(`总共需要 ${count} 个组合，使用 ${strategyNames.length} 个策略，每个策略生成 ${countPerStrategy} 个`);
+      
       // 使用多个策略生成预测
       const predictions = [];
       
@@ -66,8 +68,11 @@ export class SSQPredictor {
         
         predictions.push(...strategyPredictions);
         
+        console.log(`当前已生成 ${predictions.length} 个组合`);
+        
         // 如果已经生成足够的组合，停止
         if (predictions.length >= count) {
+          console.log(`已达到目标数量 ${count}，停止生成`);
           break;
         }
       }
@@ -80,7 +85,13 @@ export class SSQPredictor {
         pred.rank = index + 1;
       });
 
-      console.log(`生成了 ${finalPredictions.length} 个预测组合`);
+      // 统计每个策略的数量
+      const strategyCount = {};
+      finalPredictions.forEach(pred => {
+        strategyCount[pred.strategy] = (strategyCount[pred.strategy] || 0) + 1;
+      });
+      
+      console.log(`生成了 ${finalPredictions.length} 个预测组合，策略分布:`, strategyCount);
       return finalPredictions;
     } catch (error) {
       console.error('预测失败:', error);
