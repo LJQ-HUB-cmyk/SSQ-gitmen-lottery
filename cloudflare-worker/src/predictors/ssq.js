@@ -29,8 +29,8 @@ export class SSQPredictor {
       
       console.log(`使用策略: ${strategyNames.join(', ')}`);
       
-      // 获取历史数据
-      const historyData = await this.db.getAll('ssq', 500);
+      // 获取历史数据（减少数量以提高性能）
+      const historyData = await this.db.getAll('ssq', 200);
       
       if (historyData.length === 0) {
         throw new Error('没有历史数据');
@@ -118,13 +118,21 @@ export class SSQPredictor {
   async predictWithStrategy(strategyName, count, context, existingPredictions = []) {
     const strategy = getStrategy(strategyName);
     const predictions = [];
-    const maxAttempts = count * 100; // 最多尝试次数
+    const maxAttempts = Math.min(count * 50, 1000); // 限制最大尝试次数
+    const startTime = Date.now();
+    const maxTime = 3000; // 最大执行时间 3 秒
     let attempts = 0;
 
     console.log(`使用 ${strategy.name} 生成 ${count} 个组合...`);
 
     while (predictions.length < count && attempts < maxAttempts) {
       attempts++;
+
+      // 检查执行时间，防止超时
+      if (Date.now() - startTime > maxTime) {
+        console.warn(`${strategy.name} 预测超时，已生成 ${predictions.length} 个组合`);
+        break;
+      }
 
       // 使用策略生成红球和蓝球
       const redBalls = strategy.generateRedBalls(context);
@@ -150,7 +158,7 @@ export class SSQPredictor {
       }
     }
 
-    console.log(`${strategy.name} 生成了 ${predictions.length} 个组合`);
+    console.log(`${strategy.name} 生成了 ${predictions.length} 个组合（尝试 ${attempts} 次）`);
     return predictions;
   }
 

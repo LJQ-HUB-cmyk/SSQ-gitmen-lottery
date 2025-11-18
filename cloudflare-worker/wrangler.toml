@@ -25,15 +25,3 @@ id = "60a5e4f34c4e46e9aedcf7a3cb4d52ea"
 #    - TELEGRAM_BOT_TOKEN
 #    - TELEGRAM_CHAT_ID
 #    - API_KEY
-
-[observability]
-[observability.logs]
-enabled = false
-head_sampling_rate = 1
-invocation_logs = true
-persist = true
-
-[observability.traces]
-enabled = false
-head_sampling_rate = 1
-persist = true

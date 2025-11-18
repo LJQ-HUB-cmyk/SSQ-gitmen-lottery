@@ -192,11 +192,11 @@ async function runDailyTask(env) {
   const telegram = new TelegramBot(config.telegramBotToken, config.telegramChatId);
   
   try {
-    // 处理双色球
-    const ssqResult = await processSingleLottery('ssq', env, config);
-    
-    // 处理大乐透
-    const dltResult = await processSingleLottery('dlt', env, config);
+    // 并行处理双色球和大乐透（提高性能）
+    const [ssqResult, dltResult] = await Promise.all([
+      processSingleLottery('ssq', env, config),
+      processSingleLottery('dlt', env, config)
+    ]);
     
     // 构建综合消息
     const results = [ssqResult, dltResult].filter(r => r.success);

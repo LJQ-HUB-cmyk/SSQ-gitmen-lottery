@@ -5,62 +5,32 @@
 
 export class DLTSpider {
   constructor() {
-    // 500.com 数据源
-    this.backup500Url = 'https://datachart.500.com/dlt/history/newinc/history.php';
+    // 数据源：500彩票网（稳定可靠）
+    this.baseUrl = 'https://datachart.500.com/dlt/history/newinc/history.php';
     
     this.headers = {
       'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Referer': 'https://www.500.com/',
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
     };
-    this.minDelay = 500;
-    this.maxDelay = 2000;
+    // 移除延迟，提高执行速度
     this.lastRequestTime = 0;
   }
 
   /**
-   * 随机延迟
-   */
-  async randomDelay() {
-    const now = Date.now();
-    const elapsed = now - this.lastRequestTime;
-    
-    if (elapsed < this.minDelay) {
-      await this.sleep(this.minDelay - elapsed);
-    }
-    
-    const extraDelay = Math.random() * (this.maxDelay - this.minDelay);
-    if (extraDelay > 0) {
-      await this.sleep(extraDelay);
-    }
-    
-    this.lastRequestTime = Date.now();
-  }
-
-  /**
-   * 延迟函数
+   * 延迟函数（保留用于批量爬取时的节流）
    */
   sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   /**
-   * 获取最新一期数据
+   * 获取最新一期数据（直接使用 500.com）
    */
   async fetchLatest() {
-    return await this.fetchLatestFrom500();
-  }
-
-  /**
-   * 从 500.com 获取最新数据
-   */
-  async fetchLatestFrom500() {
-    await this.randomDelay();
-    
-    // 500.com 不带参数返回最近30期数据
-    const url = this.backup500Url;
-    
     console.log('从 500.com 获取大乐透最新数据...');
+    
+    const url = this.baseUrl;
     
     const response = await fetch(url, {
       headers: this.headers
@@ -79,7 +49,7 @@ export class DLTSpider {
       throw new Error('500.com 未返回数据');
     }
     
-    console.log(`从 500.com 获取到 ${data.length} 条数据`);
+    console.log(`从 500.com 获取到最新数据: ${data[0].lottery_no}`);
     
     // 返回最新一期（第一条）
     return data[0];
@@ -91,14 +61,10 @@ export class DLTSpider {
    * @param {string} endIssue - 结束期号（5位格式，如 '07200'）
    */
   async fetch500comByRange(startIssue, endIssue) {
-    await this.randomDelay();
+    const url = `${this.baseUrl}?start=${startIssue}&end=${endIssue}`;
     
-    const url = `${this.backup500Url}?start=${startIssue}&end=${endIssue}`;
-    
-    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-    console.log(`📊 数据源: 500.com (大乐透)`);
-    console.log(`🔗 查询: start=${startIssue}, end=${endIssue}`);
-    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`      📊 数据源: 500.com (大乐透)`);
+    console.log(`      🔗 查询: start=${startIssue}, end=${endIssue}`);
     
     const response = await fetch(url, {
       headers: this.headers
@@ -116,121 +82,7 @@ export class DLTSpider {
     return data;
   }
 
-  /**
-   * 获取全量历史数据
-   * @param {number} batchSize - 每批次获取的期数（默认 200）
-   * @param {string} startIssue - 起始期号（可选），格式如 "2025131"（7位）
-   */
-  async fetchAll(batchSize = 200, startIssue = null) {
-    console.log(`开始从 500.com 获取大乐透数据，每批 ${batchSize} 期${startIssue ? `，从期号 ${startIssue} 往前` : ''}...`);
-    
-    await this.randomDelay();
-    
-    let endIssue500; // 5位格式
-    let startIssue500; // 5位格式
-    
-    if (startIssue) {
-      // 如果指定了起始期号（7位格式，如 2025001）
-      const year = parseInt(startIssue.substring(0, 4));
-      const yearPrefix = startIssue.substring(2, 4);
-      const issueNum = parseInt(startIssue.substring(4));
-      
-      // 往前一期
-      let endNum = issueNum - 1;
-      let endYear = year;
-      let endYearPrefix = yearPrefix;
-      
-      if (endNum < 1) {
-        // 跨年：从上一年开始
-        endYear = year - 1;
-        endYearPrefix = endYear.toString().substring(2);
-        endNum = 153; // 假设每年最多 153 期
-        
-        console.log(`跨年：从 ${year} 年第 1 期往前到 ${endYear} 年`);
-        
-        // 检查是否已经到达大乐透开始年份（2007年）
-        if (endYear < 2007) {
-          console.log(`已到达大乐透开始年份（2007年），无法继续往前`);
-          return {
-            success: false,
-            message: '未获取到数据',
-            source: '500.com',
-            params: {
-              startIssue: startIssue,
-              endYear: endYear,
-              reason: '已到达大乐透开始年份（2007年）'
-            },
-            total: 0
-          };
-        }
-      }
-      
-      endIssue500 = endYearPrefix + endNum.toString().padStart(3, '0');
-      
-      // 计算开始期号（往前推 batchSize 期）
-      let startNum = endNum - batchSize + 1;
-      if (startNum < 1) startNum = 1;
-      
-      startIssue500 = endYearPrefix + startNum.toString().padStart(3, '0');
-      
-      console.log(`从数据库最旧期号 ${startIssue} 往前，查询 ${startIssue500} - ${endIssue500}`);
-    } else {
-      // 如果没有指定，获取最新期号
-      const latestData = await this.fetchLatestFrom500();
-      const latestIssue = latestData.lottery_no;
-      endIssue500 = latestIssue.substring(2);
-      const yearPrefix = endIssue500.substring(0, 2);
-      const endNum = parseInt(endIssue500.substring(2));
-      
-      // 计算开始期号（往前推 batchSize 期）
-      let startNum = endNum - batchSize + 1;
-      if (startNum < 1) startNum = 1;
-      
-      startIssue500 = yearPrefix + startNum.toString().padStart(3, '0');
-      
-      console.log(`获取最新数据，查询 ${startIssue500} - ${endIssue500}`);
-    }
-    
-    const url = `${this.backup500Url}?start=${startIssue500}&end=${endIssue500}`;
-    
-    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-    console.log(`📊 数据源: 500.com (大乐透)`);
-    console.log(`🔗 URL: ${url}`);
-    console.log(`📝 参数: start=${startIssue500}, end=${endIssue500}`);
-    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-    
-    const response = await fetch(url, {
-      headers: this.headers
-    });
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const html = await response.text();
-    
-    // 解析 HTML
-    const data = this.parse500Html(html);
-    
-    if (!data || data.length === 0) {
-      console.log('500.com 未返回数据');
-      return {
-        success: false,
-        message: '未获取到数据',
-        source: '500.com',
-        params: {
-          url: url,
-          start: startIssue500,
-          end: endIssue500
-        },
-        total: 0
-      };
-    }
-    
-    console.log(`从 500.com 获取到 ${data.length} 条数据`);
-    
-    return data;
-  }
 
   /**
    * 解析 500.com 的 HTML 数据
