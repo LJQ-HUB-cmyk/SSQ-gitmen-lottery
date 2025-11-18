@@ -138,18 +138,42 @@ curl -X POST https://your-worker.workers.dev/run \
 **说明**：查询最新一期开奖数据
 
 **参数**：
-- `{type}`：彩票类型（`ssq` 或 `dlt`），可选，默认 `ssq`
+- `{type}`：彩票类型（`ssq` 或 `dlt`），可选，不指定则返回所有类型
 
 **认证**：无需认证
 
 **示例**：
 ```bash
-# 双色球
-curl https://your-worker.workers.dev/latest/ssq
-curl https://your-worker.workers.dev/latest    # 默认双色球
+# 所有类型（推荐）
+curl https://your-worker.workers.dev/latest
 
-# 大乐透
-curl https://your-worker.workers.dev/latest/dlt
+# 指定类型
+curl https://your-worker.workers.dev/latest/ssq    # 仅双色球
+curl https://your-worker.workers.dev/latest/dlt    # 仅大乐透
+```
+
+**响应（所有类型）**：
+```json
+[
+  {
+    "lottery_type": "ssq",
+    "lottery_name": "双色球",
+    "lottery_no": "2025131",
+    "draw_date": "2025-11-17",
+    "red_balls": ["03", "09", "14", "17", "20", "27"],
+    "blue_ball": "12",
+    "sorted_code": "03,09,14,17,20,27-12"
+  },
+  {
+    "lottery_type": "dlt",
+    "lottery_name": "大乐透",
+    "lottery_no": "2025131",
+    "draw_date": "2025-11-17",
+    "front_balls": ["03", "08", "25", "29", "32"],
+    "back_balls": ["09", "12"],
+    "sorted_code": "03,08,25,29,32-09,12"
+  }
+]
 ```
 
 **响应（双色球）**：
@@ -181,7 +205,7 @@ curl https://your-worker.workers.dev/latest/dlt
 **说明**：获取预测号码
 
 **参数**：
-- `{type}`：彩票类型（`ssq` 或 `dlt`），可选，默认 `ssq`
+- `{type}`：彩票类型（`ssq` 或 `dlt`），可选，不指定则返回所有类型
 - `count`：预测条数（可选，默认使用 KV 配置的值）
 - `strategies`：策略列表（可选，默认使用 KV 配置的值）
 
@@ -189,18 +213,46 @@ curl https://your-worker.workers.dev/latest/dlt
 
 **示例**：
 ```bash
-# 双色球 - 使用默认配置
-curl https://your-worker.workers.dev/predict/ssq
-curl https://your-worker.workers.dev/predict    # 默认双色球
+# 所有类型（推荐）
+curl https://your-worker.workers.dev/predict
+curl "https://your-worker.workers.dev/predict?count=10&strategies=frequency,balanced"
 
-# 双色球 - 自定义参数
+# 指定类型
+curl https://your-worker.workers.dev/predict/ssq    # 仅双色球
+curl https://your-worker.workers.dev/predict/dlt    # 仅大乐透
 curl "https://your-worker.workers.dev/predict/ssq?count=10&strategies=frequency,balanced"
+```
 
-# 大乐透 - 使用默认配置
-curl https://your-worker.workers.dev/predict/dlt
-
-# 大乐透 - 自定义参数
-curl "https://your-worker.workers.dev/predict/dlt?count=15&strategies=frequency,coldHot"
+**响应（所有类型）**：
+```json
+[
+  {
+    "lottery_type": "ssq",
+    "lottery_name": "双色球",
+    "predictions": [
+      {
+        "rank": 1,
+        "red_balls": [3, 9, 14, 17, 20, 27],
+        "blue_ball": 12,
+        "sorted_code": "03,09,14,17,20,27-12",
+        "strategy": "frequency"
+      }
+    ]
+  },
+  {
+    "lottery_type": "dlt",
+    "lottery_name": "大乐透",
+    "predictions": [
+      {
+        "rank": 1,
+        "front_balls": [3, 8, 25, 29, 32],
+        "back_balls": [9, 12],
+        "sorted_code": "03,08,25,29,32-09,12",
+        "strategy": "frequency"
+      }
+    ]
+  }
+]
 ```
 
 **响应（双色球）**：
@@ -258,18 +310,56 @@ curl "https://your-worker.workers.dev/predict/dlt?count=15&strategies=frequency,
 **说明**：查看可用的预测策略
 
 **参数**：
-- `{type}`：彩票类型（`ssq` 或 `dlt`），可选，默认 `ssq`
+- `{type}`：彩票类型（`ssq` 或 `dlt`），可选，不指定则返回所有类型
 
 **认证**：无需认证
 
 **示例**：
 ```bash
-# 双色球
-curl https://your-worker.workers.dev/strategies/ssq
-curl https://your-worker.workers.dev/strategies    # 默认双色球
+# 所有类型（推荐）
+curl https://your-worker.workers.dev/strategies
 
-# 大乐透
-curl https://your-worker.workers.dev/strategies/dlt
+# 指定类型
+curl https://your-worker.workers.dev/strategies/ssq    # 仅双色球
+curl https://your-worker.workers.dev/strategies/dlt    # 仅大乐透
+```
+
+**响应（所有类型）**：
+```json
+[
+  {
+    "lottery_type": "ssq",
+    "lottery_name": "双色球",
+    "strategies": [
+      {
+        "key": "frequency",
+        "name": "频率策略",
+        "description": "基于历史出现频率"
+      },
+      {
+        "key": "balanced",
+        "name": "均衡策略",
+        "description": "追求号码分布均衡"
+      }
+    ]
+  },
+  {
+    "lottery_type": "dlt",
+    "lottery_name": "大乐透",
+    "strategies": [
+      {
+        "key": "frequency",
+        "name": "频率策略",
+        "description": "基于历史出现频率"
+      },
+      {
+        "key": "balanced",
+        "name": "均衡策略",
+        "description": "追求号码分布均衡"
+      }
+    ]
+  }
+]
 ```
 
 **响应**：
@@ -305,21 +395,54 @@ curl https://your-worker.workers.dev/strategies/dlt
 **说明**：查看号码频率统计
 
 **参数**：
-- `{type}`：彩票类型（`ssq` 或 `dlt`），可选，默认 `ssq`
+- `{type}`：彩票类型（`ssq` 或 `dlt`），可选，不指定则返回所有类型
 
 **认证**：无需认证
 
 **示例**：
 ```bash
-# 双色球
-curl https://your-worker.workers.dev/stats/ssq
-curl https://your-worker.workers.dev/stats    # 默认双色球
+# 所有类型（推荐）
+curl https://your-worker.workers.dev/stats
 
-# 大乐透
-curl https://your-worker.workers.dev/stats/dlt
+# 指定类型
+curl https://your-worker.workers.dev/stats/ssq    # 仅双色球
+curl https://your-worker.workers.dev/stats/dlt    # 仅大乐透
 ```
 
-**响应（双色球）**：
+**响应（所有类型）**：
+```json
+[
+  {
+    "lottery_type": "ssq",
+    "lottery_name": "双色球",
+    "total_count": 3378,
+    "top_red_balls": [
+      { "ball": "03", "count": 520 },
+      { "ball": "09", "count": 515 },
+      { "ball": "14", "count": 510 }
+    ],
+    "top_blue_balls": [
+      { "ball": "12", "count": 280 },
+      { "ball": "15", "count": 275 }
+    ]
+  },
+  {
+    "lottery_type": "dlt",
+    "lottery_name": "大乐透",
+    "total_count": 2799,
+    "top_front_balls": [
+      { "ball": "07", "count": 420 },
+      { "ball": "12", "count": 415 }
+    ],
+    "top_back_balls": [
+      { "ball": "09", "count": 280 },
+      { "ball": "12", "count": 275 }
+    ]
+  }
+]
+```
+
+**响应（指定类型 - 双色球）**：
 ```json
 {
   "lottery_type": "ssq",

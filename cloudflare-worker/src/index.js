@@ -293,27 +293,61 @@ export default {
     if (url.pathname === '/') {
       return new Response(
         '🎰 彩票预测系统 - Cloudflare Workers 版本\n\n' +
-        '支持的彩票类型:\n' +
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+        '支持的彩票类型\n' +
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
         '  ssq - 双色球\n' +
         '  dlt - 大乐透\n\n' +
-        '可用接口:\n' +
-        '  POST /run/{type} - 手动执行每日任务\n' +
-        '    示例: POST /run/ssq, POST /run/dlt\n\n' +
-        '  POST /init/{type} - 初始化数据库并导入历史数据\n' +
-        '    示例: POST /init/ssq, POST /init/dlt\n\n' +
-        '  GET /latest/{type} - 查询最新开奖数据\n' +
-        '    示例: GET /latest/ssq, GET /latest/dlt\n\n' +
-        '  GET /predict/{type}?count=5&strategies=frequency,balanced - 获取预测结果\n' +
-        '    示例: GET /predict/ssq?count=10&strategies=frequency,balanced\n' +
-        '          GET /predict/dlt?count=15&strategies=frequency,coldHot\n\n' +
-        '  GET /strategies/{type} - 查看可用预测策略\n' +
-        '    示例: GET /strategies/ssq, GET /strategies/dlt\n\n' +
-        '  GET /stats/{type} - 查看统计信息\n' +
-        '    示例: GET /stats/ssq, GET /stats/dlt\n\n' +
-        '  GET /test - 测试 Telegram 连接\n\n' +
-        '兼容接口（默认双色球）:\n' +
-        '  POST /run, POST /init, GET /latest, GET /predict, GET /strategies, GET /stats\n\n' +
-        '说明：定时任务通过 Cloudflare Dashboard 的触发器配置\n',
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+        'API 接口列表\n' +
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n' +
+        '┌─────────────────────────────────────────────────────────────────┐\n' +
+        '│ 批量操作接口（需要认证）                                        │\n' +
+        '└─────────────────────────────────────────────────────────────────┘\n' +
+        '  POST /run\n' +
+        '    说明: 手动执行每日任务\n' +
+        '    行为: 同时处理所有类型（双色球 + 大乐透）\n' +
+        '    认证: Bearer Token\n\n' +
+        '  POST /init/{type}\n' +
+        '    说明: 初始化数据库并导入历史数据\n' +
+        '    参数: type = ssq | dlt\n' +
+        '    示例: POST /init/ssq, POST /init/dlt\n' +
+        '    认证: Bearer Token\n\n' +
+        '┌─────────────────────────────────────────────────────────────────┐\n' +
+        '│ 查询接口（无需认证）                                            │\n' +
+        '└─────────────────────────────────────────────────────────────────┘\n' +
+        '  GET /latest\n' +
+        '    说明: 查询最新开奖数据\n' +
+        '    默认: 返回所有类型\n' +
+        '    指定: /latest/ssq 或 /latest/dlt\n\n' +
+        '  GET /predict\n' +
+        '    说明: 获取预测结果\n' +
+        '    默认: 返回所有类型\n' +
+        '    指定: /predict/ssq 或 /predict/dlt\n' +
+        '    参数: ?count=5&strategies=frequency,balanced\n\n' +
+        '  GET /stats\n' +
+        '    说明: 查看号码频率统计\n' +
+        '    默认: 返回所有类型\n' +
+        '    指定: /stats/ssq 或 /stats/dlt\n\n' +
+        '  GET /strategies\n' +
+        '    说明: 查看可用预测策略\n' +
+        '    默认: 返回所有类型\n' +
+        '    指定: /strategies/ssq 或 /strategies/dlt\n\n' +
+        '  GET /test\n' +
+        '    说明: 测试 Telegram 连接\n\n' +
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+        '接口设计说明\n' +
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+        '  ✓ 不带 {type} 参数 → 返回所有类型的数据\n' +
+        '  ✓ 带 {type} 参数   → 返回指定类型的数据\n' +
+        '  ✓ 定时任务自动处理所有类型\n\n' +
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+        '快速开始\n' +
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+        '  1. 查看所有类型的最新数据:  GET /latest\n' +
+        '  2. 查看所有类型的预测:      GET /predict\n' +
+        '  3. 查看所有类型的统计:      GET /stats\n' +
+        '  4. 查看所有类型的策略:      GET /strategies\n\n',
         {
           headers: { 'Content-Type': 'text/plain; charset=utf-8' }
         }
@@ -518,20 +552,61 @@ export default {
     // 查询最新数据
     if (url.pathname.startsWith('/latest')) {
       try {
-        const type = extractLotteryType(url.pathname);
         const db = new Database(env.DB);
-        const latest = await db.getLatest(type);
         
-        if (!latest) {
-          return new Response('暂无数据', {
-            status: 404,
-            headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+        // 检查是否指定了类型
+        const parts = url.pathname.split('/').filter(p => p);
+        const hasType = parts.length >= 2 && (parts[1] === 'ssq' || parts[1] === 'dlt');
+        
+        if (hasType) {
+          // 返回指定类型的最新数据
+          const type = parts[1];
+          const modules = getLotteryModules(type);
+          const latest = await db.getLatest(type);
+          
+          if (!latest) {
+            return new Response('暂无数据', {
+              status: 404,
+              headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+            });
+          }
+          
+          return new Response(JSON.stringify({
+            lottery_type: type,
+            lottery_name: modules.name,
+            ...latest
+          }, null, 2), {
+            headers: { 'Content-Type': 'application/json; charset=utf-8' }
+          });
+        } else {
+          // 返回所有类型的最新数据
+          const types = ['ssq', 'dlt'];
+          const allLatest = [];
+          
+          for (const type of types) {
+            const modules = getLotteryModules(type);
+            const latest = await db.getLatest(type);
+            
+            if (latest) {
+              allLatest.push({
+                lottery_type: type,
+                lottery_name: modules.name,
+                ...latest
+              });
+            }
+          }
+          
+          if (allLatest.length === 0) {
+            return new Response('暂无数据', {
+              status: 404,
+              headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+            });
+          }
+          
+          return new Response(JSON.stringify(allLatest, null, 2), {
+            headers: { 'Content-Type': 'application/json; charset=utf-8' }
           });
         }
-        
-        return new Response(JSON.stringify(latest, null, 2), {
-          headers: { 'Content-Type': 'application/json; charset=utf-8' }
-        });
       } catch (error) {
         return new Response(`查询失败: ${error.message}`, {
           status: 500,
@@ -543,33 +618,59 @@ export default {
     // 预测
     if (url.pathname.startsWith('/predict')) {
       try {
-        const type = extractLotteryType(url.pathname);
-        const modules = getLotteryModules(type);
         const db = new Database(env.DB);
         
         // 获取参数
-        // 如果没有指定 count，使用配置的默认值
         const countParam = url.searchParams.get('count');
         const count = countParam ? parseInt(countParam) : config.defaultPredictionCount;
         
         const strategiesParam = url.searchParams.get('strategies');
-        
-        // 解析策略参数（逗号分隔）
-        // 如果没有指定策略，使用配置的默认策略
         let strategies = null;
         if (strategiesParam) {
           strategies = strategiesParam.split(',').map(s => s.trim());
         } else {
-          // 使用配置的默认策略
           strategies = config.defaultStrategies.split(',').map(s => s.trim());
         }
         
-        const predictor = new modules.predictor(db);
-        const predictions = await predictor.predict(count, strategies);
+        // 检查是否指定了类型
+        const parts = url.pathname.split('/').filter(p => p);
+        const hasType = parts.length >= 2 && (parts[1] === 'ssq' || parts[1] === 'dlt');
         
-        return new Response(JSON.stringify(predictions, null, 2), {
-          headers: { 'Content-Type': 'application/json; charset=utf-8' }
-        });
+        if (hasType) {
+          // 返回指定类型的预测
+          const type = parts[1];
+          const modules = getLotteryModules(type);
+          const predictor = new modules.predictor(db);
+          const predictions = await predictor.predict(count, strategies);
+          
+          return new Response(JSON.stringify({
+            lottery_type: type,
+            lottery_name: modules.name,
+            predictions: predictions
+          }, null, 2), {
+            headers: { 'Content-Type': 'application/json; charset=utf-8' }
+          });
+        } else {
+          // 返回所有类型的预测
+          const types = ['ssq', 'dlt'];
+          const allPredictions = [];
+          
+          for (const type of types) {
+            const modules = getLotteryModules(type);
+            const predictor = new modules.predictor(db);
+            const predictions = await predictor.predict(count, strategies);
+            
+            allPredictions.push({
+              lottery_type: type,
+              lottery_name: modules.name,
+              predictions: predictions
+            });
+          }
+          
+          return new Response(JSON.stringify(allPredictions, null, 2), {
+            headers: { 'Content-Type': 'application/json; charset=utf-8' }
+          });
+        }
       } catch (error) {
         return new Response(`预测失败: ${error.message}`, {
           status: 500,
@@ -581,12 +682,43 @@ export default {
     // 获取可用策略列表
     if (url.pathname.startsWith('/strategies')) {
       try {
-        const type = extractLotteryType(url.pathname);
-        const modules = getLotteryModules(type);
-        const strategies = modules.predictor.getAvailableStrategies();
-        return new Response(JSON.stringify(strategies, null, 2), {
-          headers: { 'Content-Type': 'application/json; charset=utf-8' }
-        });
+        // 检查是否指定了类型
+        const parts = url.pathname.split('/').filter(p => p);
+        const hasType = parts.length >= 2 && (parts[1] === 'ssq' || parts[1] === 'dlt');
+        
+        if (hasType) {
+          // 返回指定类型的策略
+          const type = parts[1];
+          const modules = getLotteryModules(type);
+          const strategies = modules.predictor.getAvailableStrategies();
+          
+          return new Response(JSON.stringify({
+            lottery_type: type,
+            lottery_name: modules.name,
+            strategies: strategies
+          }, null, 2), {
+            headers: { 'Content-Type': 'application/json; charset=utf-8' }
+          });
+        } else {
+          // 返回所有类型的策略（策略是通用的，但分别列出）
+          const types = ['ssq', 'dlt'];
+          const allStrategies = [];
+          
+          for (const type of types) {
+            const modules = getLotteryModules(type);
+            const strategies = modules.predictor.getAvailableStrategies();
+            
+            allStrategies.push({
+              lottery_type: type,
+              lottery_name: modules.name,
+              strategies: strategies
+            });
+          }
+          
+          return new Response(JSON.stringify(allStrategies, null, 2), {
+            headers: { 'Content-Type': 'application/json; charset=utf-8' }
+          });
+        }
       } catch (error) {
         return new Response(`获取策略失败: ${error.message}`, {
           status: 500,
@@ -598,10 +730,7 @@ export default {
     // 统计信息
     if (url.pathname.startsWith('/stats')) {
       try {
-        const type = extractLotteryType(url.pathname);
         const db = new Database(env.DB);
-        const frequency = await db.getFrequency(type);
-        const count = await db.getCount(type);
         
         // 将频率对象转换为排序后的数组
         const convertToArray = (freqObj) => {
@@ -611,18 +740,55 @@ export default {
             .sort((a, b) => b.count - a.count);
         };
         
-        const stats = {
-          lottery_type: type,
-          total_count: count,
-          top_red_balls: frequency.red ? convertToArray(frequency.red).slice(0, 10) : undefined,
-          top_blue_balls: frequency.blue ? convertToArray(frequency.blue).slice(0, 5) : undefined,
-          top_front_balls: frequency.front ? convertToArray(frequency.front).slice(0, 10) : undefined,
-          top_back_balls: frequency.back ? convertToArray(frequency.back).slice(0, 5) : undefined
-        };
+        // 检查是否指定了类型
+        const parts = url.pathname.split('/').filter(p => p);
+        const hasType = parts.length >= 2 && (parts[1] === 'ssq' || parts[1] === 'dlt');
         
-        return new Response(JSON.stringify(stats, null, 2), {
-          headers: { 'Content-Type': 'application/json; charset=utf-8' }
-        });
+        if (hasType) {
+          // 返回指定类型的统计
+          const type = parts[1];
+          const modules = getLotteryModules(type);
+          const frequency = await db.getFrequency(type);
+          const count = await db.getCount(type);
+          
+          const stats = {
+            lottery_type: type,
+            lottery_name: modules.name,
+            total_count: count,
+            top_red_balls: frequency.red ? convertToArray(frequency.red).slice(0, 10) : undefined,
+            top_blue_balls: frequency.blue ? convertToArray(frequency.blue).slice(0, 5) : undefined,
+            top_front_balls: frequency.front ? convertToArray(frequency.front).slice(0, 10) : undefined,
+            top_back_balls: frequency.back ? convertToArray(frequency.back).slice(0, 5) : undefined
+          };
+          
+          return new Response(JSON.stringify(stats, null, 2), {
+            headers: { 'Content-Type': 'application/json; charset=utf-8' }
+          });
+        } else {
+          // 返回所有类型的统计
+          const types = ['ssq', 'dlt'];
+          const allStats = [];
+          
+          for (const type of types) {
+            const modules = getLotteryModules(type);
+            const frequency = await db.getFrequency(type);
+            const count = await db.getCount(type);
+            
+            allStats.push({
+              lottery_type: type,
+              lottery_name: modules.name,
+              total_count: count,
+              top_red_balls: frequency.red ? convertToArray(frequency.red).slice(0, 10) : undefined,
+              top_blue_balls: frequency.blue ? convertToArray(frequency.blue).slice(0, 5) : undefined,
+              top_front_balls: frequency.front ? convertToArray(frequency.front).slice(0, 10) : undefined,
+              top_back_balls: frequency.back ? convertToArray(frequency.back).slice(0, 5) : undefined
+            });
+          }
+          
+          return new Response(JSON.stringify(allStats, null, 2), {
+            headers: { 'Content-Type': 'application/json; charset=utf-8' }
+          });
+        }
       } catch (error) {
         return new Response(`查询失败: ${error.message}`, {
           status: 500,

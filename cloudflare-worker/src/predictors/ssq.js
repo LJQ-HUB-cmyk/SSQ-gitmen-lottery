@@ -39,14 +39,22 @@ export class SSQPredictor {
       // 获取频率统计
       const frequency = await this.db.getFrequency('ssq');
       
+      // 将频率对象转换为排序后的数组
+      const convertToArray = (freqObj) => {
+        if (!freqObj) return [];
+        return Object.entries(freqObj)
+          .map(([ball, count]) => ({ ball: String(ball).padStart(2, '0'), count }))
+          .sort((a, b) => b.count - a.count);
+      };
+      
       // 获取历史组合（用于去重）
       const historicalCombinations = await this.db.getHistoricalCombinations('ssq');
 
       // 构建上下文数据
       const context = {
         historyData,
-        redFrequency: frequency.red,
-        blueFrequency: frequency.blue,
+        redFrequency: convertToArray(frequency.red),
+        blueFrequency: convertToArray(frequency.blue),
         historicalCombinations
       };
 
