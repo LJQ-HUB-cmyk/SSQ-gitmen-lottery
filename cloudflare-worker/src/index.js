@@ -823,8 +823,16 @@ export default {
     }
     
     return new Response('Not Found', { status: 404 });
+  },
+
+  /**
+   * Cron 触发器处理器
+   * 由 Cloudflare 定时任务自动调用
+   */
+  async scheduled(event, env, ctx) {
+    console.log('Cron 触发器执行:', event.cron);
+    
+    // 使用 waitUntil 确保任务完成
+    ctx.waitUntil(runDailyTask(env));
   }
 };
-
-// 导出 runDailyTask 供 Cloudflare 触发器使用
-export { runDailyTask };
