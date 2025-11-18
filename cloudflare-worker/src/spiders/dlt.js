@@ -26,6 +26,7 @@ export class DLTSpider {
 
   /**
    * 获取最新一期数据（直接使用 500.com）
+   * 注意：500.com 返回的数据已按期号从新到旧排序，第一条即为最新
    */
   async fetchLatest() {
     console.log('从 500.com 获取大乐透最新数据...');
@@ -42,14 +43,13 @@ export class DLTSpider {
 
     const html = await response.text();
     
-    // 解析 HTML 获取最新一期数据
-    const data = this.parse500Html(html);
+    // 解析 HTML 获取最新一期数据（只解析第一条）
+    // 500.com 默认按期号降序排列，第一条就是最新的
+    const data = this.parse500Html(html, true);
     
     if (!data || data.length === 0) {
       throw new Error('500.com 未返回数据');
     }
-    
-    console.log(`从 500.com 获取到最新数据: ${data[0].lottery_no}`);
     
     // 返回最新一期（第一条）
     return data[0];
@@ -86,8 +86,10 @@ export class DLTSpider {
 
   /**
    * 解析 500.com 的 HTML 数据
+   * @param {string} html - HTML 内容
+   * @param {boolean} onlyFirst - 是否只解析第一条（用于获取最新数据）
    */
-  parse500Html(html) {
+  parse500Html(html, onlyFirst = false) {
     const results = [];
     
     try {
@@ -164,13 +166,21 @@ export class DLTSpider {
               back_balls: backBalls,
               sorted_code: [...frontBalls].sort().join(',') + '-' + [...backBalls].sort().join(',')
             });
+            
+            // 如果只需要第一条，立即返回
+            if (onlyFirst && results.length === 1) {
+              console.log(`成功解析最新数据: ${lotteryNo}`);
+              return results;
+            }
           }
         } catch (e) {
           console.error('解析行数据失败:', e);
         }
       }
       
-      console.log(`成功解析 ${results.length} 条数据`);
+      if (!onlyFirst) {
+        console.log(`成功解析 ${results.length} 条数据`);
+      }
     } catch (error) {
       console.error('解析 500.com HTML 失败:', error);
     }

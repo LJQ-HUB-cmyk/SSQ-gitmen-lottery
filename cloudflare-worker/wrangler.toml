@@ -19,8 +19,13 @@ database_id = "01343890-8135-492e-b9c5-34b57a4532e1"
 binding = "KV_BINDING"
 id = "60a5e4f34c4e46e9aedcf7a3cb4d52ea"
 
+# Cron 触发器配置
+# 每天 10:00 北京时间执行（UTC 时间 14:00）
+[triggers]
+crons = ["00 14 * * *"]
+
 # 说明：
-# 1. 定时任务通过 Cloudflare Dashboard 的触发器配置
+# 1. Cron 表达式: "30 13 * * *" = 每天 UTC 13:30 = 北京时间 21:30
 # 2. 配置信息存储在 KV 中：
 #    - TELEGRAM_BOT_TOKEN
 #    - TELEGRAM_CHAT_ID
