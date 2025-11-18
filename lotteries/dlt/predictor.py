@@ -167,12 +167,16 @@ class DLTPredictor(BasePredictor):
         Returns:
             预测结果列表
         """
+        import time
+        
         if existing_predictions is None:
             existing_predictions = []
         
         strategy = get_strategy(strategy_name)
         predictions = []
-        max_attempts = count * 100  # 最多尝试次数
+        max_attempts = min(count * 20, 200)  # 减少尝试次数（优化）
+        start_time = time.time()
+        max_time = 5.0  # 最大执行时间 5 秒（优化）
         attempts = 0
 
         logger.info(f"使用 {strategy.name} 生成 {count} 个组合...")
@@ -184,6 +188,11 @@ class DLTPredictor(BasePredictor):
 
         while len(predictions) < count and attempts < max_attempts:
             attempts += 1
+
+            # 每 10 次检查一次时间（减少时间检查开销）
+            if attempts % 10 == 0 and time.time() - start_time > max_time:
+                logger.warning(f"{strategy.name} 预测超时，已生成 {len(predictions)} 个组合")
+                break
 
             # 使用策略生成前区和后区
             front_balls = strategy.generate_front_balls(context)
@@ -211,7 +220,7 @@ class DLTPredictor(BasePredictor):
                 'prediction_time': datetime.now().isoformat()
             })
 
-        logger.info(f"{strategy.name} 生成了 {len(predictions)} 个组合")
+        logger.info(f"{strategy.name} 生成了 {len(predictions)} 个组合（尝试 {attempts} 次）")
         return predictions
 
 

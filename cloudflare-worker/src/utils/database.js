@@ -302,12 +302,12 @@ export class Database {
 
   /**
    * 获取号码频率统计
-   * 优化：只查询最近 200 条数据，减少查询时间
+   * 优化：只查询最近 100 条数据（免费计划优化）
    */
   async getFrequency(table) {
     if (table === 'ssq') {
       const results = await this.db
-        .prepare(`SELECT red1, red2, red3, red4, red5, red6, blue FROM ${table}_lottery ORDER BY id DESC LIMIT 200`)
+        .prepare(`SELECT red1, red2, red3, red4, red5, red6, blue FROM ${table}_lottery ORDER BY id DESC LIMIT 100`)
         .all();
 
       const redFreq = {};
@@ -341,7 +341,7 @@ export class Database {
       };
     } else if (table === 'dlt') {
       const results = await this.db
-        .prepare(`SELECT front1, front2, front3, front4, front5, back1, back2 FROM ${table}_lottery ORDER BY id DESC LIMIT 200`)
+        .prepare(`SELECT front1, front2, front3, front4, front5, back1, back2 FROM ${table}_lottery ORDER BY id DESC LIMIT 100`)
         .all();
 
       const frontFreq = {};
@@ -384,11 +384,11 @@ export class Database {
 
   /**
    * 获取历史中奖组合（用于去重）
-   * 优化：只查询最近 200 条数据，减少查询时间和内存使用
+   * 优化：只查询最近 50 条数据（免费计划优化）
    */
   async getHistoricalCombinations(table) {
     const results = await this.db
-      .prepare(`SELECT sorted_code FROM ${table}_lottery ORDER BY id DESC LIMIT 200`)
+      .prepare(`SELECT sorted_code FROM ${table}_lottery ORDER BY id DESC LIMIT 50`)
       .all();
 
     return new Set(results.results.map(row => row.sorted_code));

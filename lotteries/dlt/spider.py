@@ -1,24 +1,27 @@
 """
-大乐透（DLT）爬虫
-数据源：500.com
+大乐透（DLT）爬虫 - 优化版本
+只使用 500.com 作为数据源
+
+大乐透规则：
+- 前区：从1-35中选5个（不重复）
+- 后区：从1-12中选2个（不重复）
+- 每周一、三、六开奖
 """
 
 import requests
 from bs4 import BeautifulSoup
 import logging
 from typing import List, Dict
-import time
-from datetime import datetime
 import re
 
 logger = logging.getLogger(__name__)
 
 
 class DLTSpider:
-    """大乐透爬虫类"""
+    """大乐透爬虫类 - 只使用 500.com"""
 
-    # 500.com 数据源
-    BACKUP_500_URL = "https://datachart.500.com/dlt/history/newinc/history.php"
+    # 数据源：500彩票网（稳定可靠）
+    BASE_URL = "https://datachart.500.com/dlt/history/newinc/history.php"
 
     HEADERS = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
@@ -31,173 +34,137 @@ class DLTSpider:
         self.retry_times = retry_times
         self.session = requests.Session()
 
-    def fetch_500com_data(self, start_issue: str, end_issue: str) -> List[Dict]:
+    def fetch_latest(self, count: int = 1) -> List[Dict]:
+        """获取最新开奖数据（只使用 500.com）
+        
+        Args:
+            count: 要获取的期数（默认1期）
+            
+        Returns:
+            中奖数据列表
         """
-        从 500.com 获取历史数据（支持期号范围查询）
+        logger.info("从 500.com 获取大乐透最新数据...")
+        data = self._fetch_from_500com()
+        if data and len(data) > 0:
+            logger.info(f"成功获取 {len(data)} 条数据，返回最新 {count} 条")
+            return data[:count]
+        
+        raise Exception("未获取到数据")
 
+    def fetch_by_range(self, start_issue: str, end_issue: str) -> List[Dict]:
+        """按期号范围获取数据（用于初始化）
+        
         Args:
             start_issue: 开始期号（5位格式，如 '07001'）
             end_issue: 结束期号（5位格式，如 '07200'）
-
+            
         Returns:
             中奖数据列表
         """
-        all_results = []
-        url = f'{self.BACKUP_500_URL}?start={start_issue}&end={end_issue}'
-
-        logger.info(f"从 500.com 获取历史数据: {start_issue} - {end_issue}")
-
+        url = f"{self.BASE_URL}?start={start_issue}&end={end_issue}"
+        logger.info(f"从 500.com 获取期号范围数据: {start_issue} - {end_issue}")
+        
         try:
             response = self.session.get(url, headers=self.HEADERS, timeout=self.timeout)
-            response.encoding = 'utf-8'
             response.raise_for_status()
+            
+            data = self._parse_html(response.text)
+            logger.info(f"成功获取 {len(data)} 条数据")
+            return data
+            
+        except Exception as e:
+            logger.error(f"获取数据失败: {e}")
+            return []
 
-            soup = BeautifulSoup(response.text, 'lxml')
-            tbody = soup.find('tbody', {'id': 'tdata'})
+    def _fetch_from_500com(self) -> List[Dict]:
+        """从 500.com 获取数据（不带参数返回最近30期）"""
+        try:
+            response = self.session.get(
+                self.BASE_URL,
+                headers=self.HEADERS,
+                timeout=self.timeout
+            )
+            response.raise_for_status()
+            
+            return self._parse_html(response.text)
+            
+        except Exception as e:
+            logger.error(f"从 500.com 获取数据失败: {e}")
+            return []
 
+    def _parse_html(self, html: str) -> List[Dict]:
+        """解析 500.com 的 HTML 数据
+        
+        注意：500.com 返回的数据已按期号从新到旧排序
+        """
+        results = []
+        
+        try:
+            soup = BeautifulSoup(html, 'html.parser')
+            tbody = soup.find('tbody', id='tdata')
+            
             if not tbody:
-                logger.warning("未找到表格数据")
-                return []
-
+                logger.warning("未找到数据表格")
+                return results
+            
             rows = tbody.find_all('tr')
             logger.info(f"找到 {len(rows)} 行数据")
-
+            
             for row in rows:
                 try:
-                    tds = row.find_all('td')
-                    if len(tds) < 10:
+                    cells = row.find_all('td')
+                    if len(cells) < 10:
                         continue
-
-                    # 解析表格列
-                    # 期号 | 前区1-5 | 后区1-2 | 奖池 | 一等奖注 | 一等奖金 | 二等奖注 | 二等奖金 | 投注额 | 开奖日期
-                    lottery_no = tds[0].text.strip()
-
-                    # 补全期号：如果是5位数字，补全为7位（加上年份前缀20）
+                    
+                    # 提取文本内容
+                    texts = [cell.get_text(strip=True).replace(',', '') for cell in cells]
+                    
+                    # 期号（第0列）
+                    lottery_no = texts[0]
+                    # 补全期号：如果是5位数字，补全为7位
                     if lottery_no and re.match(r'^\d{5}$', lottery_no):
                         lottery_no = '20' + lottery_no
-
-                    # 前区（前5列）
-                    front_texts = [tds[i].text.strip() for i in range(1, 6)]
-                    front_balls = sorted([int(t) for t in front_texts if t.isdigit()])
-
+                    
+                    # 前区（第1-5列）
+                    front_balls = []
+                    for i in range(1, 6):
+                        if texts[i] and re.match(r'^\d+$', texts[i]):
+                            front_balls.append(int(texts[i]))
+                    front_balls = sorted(front_balls)
+                    
                     # 后区（第6-7列）
-                    back_texts = [tds[i].text.strip() for i in range(6, 8)]
-                    back_balls = sorted([int(t) for t in back_texts if t.isdigit()])
-
+                    back_balls = []
+                    for i in range(6, 8):
+                        if texts[i] and re.match(r'^\d+$', texts[i]):
+                            back_balls.append(int(texts[i]))
+                    back_balls = sorted(back_balls)
+                    
                     # 开奖日期（最后一列）
-                    draw_date_text = tds[-1].text.strip()
-                    # 尝试提取 YYYY-MM-DD 格式
-                    draw_date_match = re.search(r'\d{4}-\d{2}-\d{2}', draw_date_text)
-                    draw_date = draw_date_match.group() if draw_date_match else ''
-
-                    if (lottery_no and len(front_balls) == 5 and len(back_balls) == 2 and draw_date):
-                        all_results.append({
+                    draw_date = texts[-1]
+                    
+                    # 验证数据完整性
+                    if (lottery_no and re.match(r'^\d{7}$', lottery_no) and
+                        len(front_balls) == 5 and len(back_balls) == 2 and
+                        draw_date and re.match(r'^\d{4}-\d{2}-\d{2}$', draw_date)):
+                        
+                        results.append({
                             'lottery_no': lottery_no,
                             'draw_date': draw_date,
                             'front_balls': front_balls,
-                            'back_balls': back_balls,
-                            'created_at': datetime.now().isoformat()
+                            'back_balls': back_balls
                         })
-
-                except (ValueError, IndexError, AttributeError) as e:
-                    logger.debug(f"解析行失败: {e}")
+                        
+                except Exception as e:
+                    logger.debug(f"解析行数据失败: {e}")
                     continue
-
-            logger.info(f"从 500.com 获取 {len(all_results)} 条数据")
-
+            
+            logger.info(f"成功解析 {len(results)} 条数据")
+            
         except Exception as e:
-            logger.error(f"从 500.com 获取数据失败: {e}")
+            logger.error(f"解析 HTML 失败: {e}")
+        
+        return results
 
-        return all_results
-
-    def fetch_latest_from_500com(self, count: int = 30) -> List[Dict]:
-        """从 500.com 获取最新数据（备用数据源）
-
-        Args:
-            count: 期望获取的数量（实际最多30期）
-
-        Returns:
-            中奖数据列表
-        """
-        all_results = []
-        # 500.com 不带参数返回最近30期
-        url = self.BACKUP_500_URL
-
-        logger.info(f"从 500.com 获取最新数据（最多30期）...")
-
-        try:
-            response = self.session.get(url, headers=self.HEADERS, timeout=self.timeout)
-            response.encoding = 'utf-8'
-            response.raise_for_status()
-
-            soup = BeautifulSoup(response.text, 'lxml')
-            tbody = soup.find('tbody', {'id': 'tdata'})
-
-            if not tbody:
-                logger.warning("未找到表格数据")
-                return []
-
-            rows = tbody.find_all('tr')
-            logger.info(f"找到 {len(rows)} 行数据")
-
-            for row in rows:
-                try:
-                    tds = row.find_all('td')
-                    if len(tds) < 10:
-                        continue
-
-                    # 解析表格列
-                    lottery_no = tds[0].text.strip()
-
-                    # 补全期号
-                    if lottery_no and re.match(r'^\d{5}$', lottery_no):
-                        lottery_no = '20' + lottery_no
-
-                    # 前区
-                    front_texts = [tds[i].text.strip() for i in range(1, 6)]
-                    front_balls = sorted([int(t) for t in front_texts if t.isdigit()])
-
-                    # 后区
-                    back_texts = [tds[i].text.strip() for i in range(6, 8)]
-                    back_balls = sorted([int(t) for t in back_texts if t.isdigit()])
-
-                    # 开奖日期
-                    draw_date_text = tds[-1].text.strip()
-                    draw_date_match = re.search(r'\d{4}-\d{2}-\d{2}', draw_date_text)
-                    draw_date = draw_date_match.group() if draw_date_match else ''
-
-                    if (lottery_no and len(front_balls) == 5 and len(back_balls) == 2 and draw_date):
-                        all_results.append({
-                            'lottery_no': lottery_no,
-                            'draw_date': draw_date,
-                            'front_balls': front_balls,
-                            'back_balls': back_balls,
-                            'created_at': datetime.now().isoformat()
-                        })
-
-                except (ValueError, IndexError, AttributeError) as e:
-                    logger.debug(f"解析行失败: {e}")
-                    continue
-
-            logger.info(f"从 500.com 获取 {len(all_results)} 条数据")
-
-            # 限制返回数量
-            return all_results[:count] if count else all_results
-
-        except Exception as e:
-            logger.error(f"从 500.com 获取数据失败: {e}")
-            raise
-
-
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
-    spider = DLTSpider()
-
-    # 测试爬取
-    try:
-        data = spider.fetch_500com_data('25102', '25131')
-        print(f"\n共爬取 {len(data)} 条数据")
-        for item in data[:3]:
-            print(item)
-    except Exception as e:
-        logger.error(f"爬取失败: {e}")
+    def close(self):
+        """关闭会话"""
+        self.session.close()

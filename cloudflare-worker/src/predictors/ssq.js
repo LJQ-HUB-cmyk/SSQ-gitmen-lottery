@@ -29,15 +29,16 @@ export class SSQPredictor {
       
       console.log(`使用策略: ${strategyNames.join(', ')}`);
       
-      // 获取历史数据（减少数量以提高性能）
-      const historyData = await this.db.getAll('ssq', 200);
+      // 并行获取所有需要的数据（免费计划优化：减少查询数量）
+      const [historyData, frequency, historicalCombinations] = await Promise.all([
+        this.db.getAll('ssq', 100),  // 减少到 100 条
+        this.db.getFrequency('ssq'),
+        this.db.getHistoricalCombinations('ssq')
+      ]);
       
       if (historyData.length === 0) {
         throw new Error('没有历史数据');
       }
-
-      // 获取频率统计
-      const frequency = await this.db.getFrequency('ssq');
       
       // 将频率对象转换为排序后的数组
       const convertToArray = (freqObj) => {
@@ -46,9 +47,6 @@ export class SSQPredictor {
           .map(([ball, count]) => ({ ball: String(ball).padStart(2, '0'), count }))
           .sort((a, b) => b.count - a.count);
       };
-      
-      // 获取历史组合（用于去重）
-      const historicalCombinations = await this.db.getHistoricalCombinations('ssq');
 
       // 构建上下文数据
       const context = {
@@ -118,9 +116,9 @@ export class SSQPredictor {
   async predictWithStrategy(strategyName, count, context, existingPredictions = []) {
     const strategy = getStrategy(strategyName);
     const predictions = [];
-    const maxAttempts = Math.min(count * 50, 1000); // 限制最大尝试次数
+    const maxAttempts = Math.min(count * 20, 200); // 大幅减少尝试次数（免费计划优化）
     const startTime = Date.now();
-    const maxTime = 3000; // 最大执行时间 3 秒
+    const maxTime = 500; // 最大执行时间 500ms（免费计划优化）
     let attempts = 0;
 
     console.log(`使用 ${strategy.name} 生成 ${count} 个组合...`);
@@ -128,8 +126,8 @@ export class SSQPredictor {
     while (predictions.length < count && attempts < maxAttempts) {
       attempts++;
 
-      // 检查执行时间，防止超时
-      if (Date.now() - startTime > maxTime) {
+      // 每 10 次检查一次时间（减少 Date.now() 调用）
+      if (attempts % 10 === 0 && Date.now() - startTime > maxTime) {
         console.warn(`${strategy.name} 预测超时，已生成 ${predictions.length} 个组合`);
         break;
       }

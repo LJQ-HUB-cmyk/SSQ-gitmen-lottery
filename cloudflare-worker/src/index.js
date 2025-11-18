@@ -81,6 +81,7 @@ function extractLotteryType(pathname) {
 
 /**
  * 处理单个彩票类型的增量更新和预测
+ * 免费计划优化：添加超时保护
  */
 async function processSingleLottery(type, env, config) {
   const modules = getLotteryModules(type);
@@ -91,15 +92,17 @@ async function processSingleLottery(type, env, config) {
   console.log(`📊 处理 ${modules.name}`);
   console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
   
+  const startTime = Date.now();
+  const maxProcessTime = 3000; // 单个彩票类型最大处理时间 3 秒
+  
   try {
+    // 并行获取数据库最新记录和线上最新数据（优化：减少串行等待）
+    const [latestInDb, latestOnline] = await Promise.all([
+      db.getLatest(type),
+      spider.fetchLatest()
+    ]);
     
-    // 获取数据库中最新的一期
-    const latestInDb = await db.getLatest(type);
     console.log(`数据库最新记录: ${latestInDb ? `${latestInDb.lottery_no} (${latestInDb.draw_date})` : '无数据'}`);
-    
-    // 获取线上最新一期数据
-    console.log('获取线上最新数据...');
-    let latestOnline = await spider.fetchLatest();
     
     if (!latestOnline) {
       console.log('⚠ 未获取到线上数据');
@@ -127,7 +130,7 @@ async function processSingleLottery(type, env, config) {
       };
     }
     
-    // 有新数据，检查是否已存在
+    // 有新数据，检查是否已存在（优化：只在期号不同时才检查）
     console.log('检测到新数据，检查是否需要入库...');
     const exists = await db.checkExists(type, latestOnline.lottery_no);
     
@@ -148,6 +151,21 @@ async function processSingleLottery(type, env, config) {
     console.log(`准备入库新数据: ${latestOnline.lottery_no} (${latestOnline.draw_date})`);
     const result = await db.batchInsert(type, [latestOnline]);
     console.log(`✓ 入库完成: 新增 ${result.inserted} 条`);
+    
+    // 检查是否超时
+    if (Date.now() - startTime > maxProcessTime) {
+      console.warn(`${modules.name} 处理超时，跳过预测`);
+      return {
+        type: type,
+        name: modules.name,
+        success: true,
+        message: '增量更新完成（跳过预测）',
+        hasNewData: true,
+        new_count: result.inserted,
+        latest: latestOnline,
+        predictions: []
+      };
+    }
     
     // 预测下一期
     console.log('开始预测下一期...');
@@ -188,6 +206,9 @@ async function runDailyTask(env) {
   console.log('时间:', new Date().toISOString());
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   
+  const taskStartTime = Date.now();
+  const maxTaskTime = 8000; // 全局任务最大执行时间 8 秒（免费计划优化）
+  
   const config = await getConfig(env);
   const telegram = new TelegramBot(config.telegramBotToken, config.telegramChatId);
   
@@ -198,48 +219,61 @@ async function runDailyTask(env) {
       processSingleLottery('dlt', env, config)
     ]);
     
-    // 构建综合消息
-    const results = [ssqResult, dltResult].filter(r => r.success);
+    // 检查全局超时
+    if (Date.now() - taskStartTime > maxTaskTime) {
+      console.warn('任务执行超时，跳过 Telegram 通知');
+      return {
+        success: true,
+        message: '任务执行完成（超时跳过通知）',
+        results: [ssqResult, dltResult]
+      };
+    }
     
-    if (results.length > 0) {
+    // 构建综合消息（优化：只在有新数据时发送通知）
+    const results = [ssqResult, dltResult].filter(r => r.success);
+    const hasNewData = results.some(r => r.hasNewData);
+    
+    // 只在有新数据时发送 Telegram 通知
+    if (hasNewData) {
       let message = '🎰 <b>彩票预测系统 - 每日更新</b>\n\n';
       
       for (const result of results) {
+        // 只显示有新数据的彩票类型
+        if (!result.hasNewData) continue;
+        
         message += `━━━━━━━━━━━━━━━━━━━━━━━━\n`;
         message += `<b>${result.name}</b>\n\n`;
         
-        if (result.hasNewData) {
-          const latest = result.latest;
-          message += `📅 最新开奖: ${latest.lottery_no} (${latest.draw_date})\n`;
-          
-          if (result.type === 'ssq') {
-            message += `🔴 号码: ${latest.red_balls} + ${latest.blue_ball}\n\n`;
-          } else {
-            const frontStr = latest.front_balls.map(b => String(b).padStart(2, '0')).join(',');
-            const backStr = latest.back_balls.map(b => String(b).padStart(2, '0')).join(',');
-            message += `🔴 号码: 前区 ${frontStr} | 后区 ${backStr}\n\n`;
-          }
-          
-          // 预测结果（只显示前3组）
-          if (result.predictions && Array.isArray(result.predictions) && result.predictions.length > 0) {
-            message += `🔮 <b>预测下一期（${result.predictions.length} 组）</b>\n`;
-            for (let i = 0; i < Math.min(3, result.predictions.length); i++) {
-              const pred = result.predictions[i];
-              if (result.type === 'ssq') {
-                message += `  ${i + 1}. ${pred.red_balls} + ${pred.blue_ball}\n`;
-              } else {
-                const frontStr = pred.front_balls.map(b => String(b).padStart(2, '0')).join(',');
-                const backStr = pred.back_balls.map(b => String(b).padStart(2, '0')).join(',');
-                message += `  ${i + 1}. ${frontStr} | ${backStr}\n`;
-              }
-            }
-            
-            if (result.predictions.length > 3) {
-              message += `  ... 还有 ${result.predictions.length - 3} 组\n`;
-            }
-          }
+        const latest = result.latest;
+        message += `📅 最新开奖: ${latest.lottery_no} (${latest.draw_date})\n`;
+        
+        if (result.type === 'ssq') {
+          message += `🔴 号码: ${latest.red_balls.join(',')} + ${latest.blue_ball}\n\n`;
         } else {
-          message += `✅ 暂无新数据\n`;
+          const frontStr = latest.front_balls.map(b => String(b).padStart(2, '0')).join(',');
+          const backStr = latest.back_balls.map(b => String(b).padStart(2, '0')).join(',');
+          message += `🔴 号码: 前区 ${frontStr} | 后区 ${backStr}\n\n`;
+        }
+        
+        // 预测结果（只显示前2组，免费计划优化）
+        if (result.predictions && Array.isArray(result.predictions) && result.predictions.length > 0) {
+          message += `🔮 <b>预测下一期（${result.predictions.length} 组）</b>\n`;
+          const showCount = Math.min(2, result.predictions.length);
+          for (let i = 0; i < showCount; i++) {
+            const pred = result.predictions[i];
+            if (result.type === 'ssq') {
+              const redStr = pred.red_balls.map(b => String(b).padStart(2, '0')).join(',');
+              message += `  ${i + 1}. ${redStr} + ${String(pred.blue_ball).padStart(2, '0')}\n`;
+            } else {
+              const frontStr = pred.front_balls.map(b => String(b).padStart(2, '0')).join(',');
+              const backStr = pred.back_balls.map(b => String(b).padStart(2, '0')).join(',');
+              message += `  ${i + 1}. ${frontStr} | ${backStr}\n`;
+            }
+          }
+          
+          if (result.predictions.length > showCount) {
+            message += `  ... 还有 ${result.predictions.length - showCount} 组\n`;
+          }
         }
         
         message += '\n';
@@ -252,6 +286,8 @@ async function runDailyTask(env) {
       console.log('\n发送 Telegram 通知...');
       await telegram.sendMessage(message);
       console.log('✓ Telegram 通知已发送');
+    } else {
+      console.log('\n无新数据，跳过 Telegram 通知');
     }
     
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');

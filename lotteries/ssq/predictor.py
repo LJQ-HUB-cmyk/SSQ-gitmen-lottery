@@ -239,7 +239,7 @@ class SSQPredictor(BasePredictor):
         context: Dict,
         existing_predictions: List[dict]
     ) -> List[dict]:
-        """使用指定策略生成预测
+        """使用指定策略生成预测（优化版：添加超时和减少尝试次数）
         
         Args:
             strategy_name: 策略名称
@@ -250,15 +250,24 @@ class SSQPredictor(BasePredictor):
         Returns:
             预测结果列表
         """
+        import time
+        
         strategy = get_strategy(strategy_name)
         predictions = []
-        max_attempts = count * 100  # 最多尝试次数
+        max_attempts = min(count * 20, 200)  # 减少尝试次数（优化）
+        start_time = time.time()
+        max_time = 5.0  # 最大执行时间 5 秒（优化）
         attempts = 0
         
         logger.info(f"使用 {strategy.name} 生成 {count} 个组合...")
         
         while len(predictions) < count and attempts < max_attempts:
             attempts += 1
+            
+            # 每 10 次检查一次时间（减少时间检查开销）
+            if attempts % 10 == 0 and time.time() - start_time > max_time:
+                logger.warning(f"{strategy.name} 预测超时，已生成 {len(predictions)} 个组合")
+                break
             
             # 使用策略生成红球和蓝球
             red_balls = strategy.generate_red_balls(context)
@@ -282,7 +291,7 @@ class SSQPredictor(BasePredictor):
                     'prediction_time': datetime.now().isoformat()
                 })
         
-        logger.info(f"{strategy.name} 生成了 {len(predictions)} 个组合")
+        logger.info(f"{strategy.name} 生成了 {len(predictions)} 个组合（尝试 {attempts} 次）")
         return predictions
     
     @staticmethod
