@@ -279,27 +279,30 @@ async function processSingleLottery(type, env, config) {
     const hasNewData = fetchResult.hasNewData;
     const inserted = fetchResult.inserted;
     
-    // 检查是否超时
-    if (Date.now() - startTime > maxProcessTime) {
-      console.warn(`${modules.name} 处理超时，跳过预测`);
-      return {
-        type: type,
-        name: modules.name,
-        success: true,
-        message: hasNewData ? '增量更新完成（跳过预测）' : '数据已是最新（跳过预测）',
-        hasNewData: hasNewData,
-        new_count: inserted,
-        latest: latest,
-        predictions: []
-      };
-    }
-    
     // 预测下一期（无论是否有新数据都进行预测）
     console.log(`开始预测 ${modules.name} 下一期...`);
-    const defaultStrategies = config.defaultStrategies.split(',').map(s => s.trim());
-    const predictor = new modules.predictor(db, { strategies: defaultStrategies });
-    const predictions = await predictor.predict(config.defaultPredictionCount);
-    console.log(`✓ ${modules.name} 预测完成: ${predictions.length} 组`);
+    
+    let predictions = [];
+    try {
+      // 检查数据库中的数据量
+      const dataCount = await db.getCount(type);
+      console.log(`${modules.name} 数据库记录数: ${dataCount}`);
+      
+      if (dataCount === 0) {
+        console.warn(`${modules.name} 数据库无数据，无法预测`);
+      } else {
+        const defaultStrategies = config.defaultStrategies.split(',').map(s => s.trim());
+        console.log(`${modules.name} 使用策略: ${defaultStrategies.join(', ')}`);
+        
+        const predictor = new modules.predictor(db, { strategies: defaultStrategies });
+        predictions = await predictor.predict(config.defaultPredictionCount);
+        console.log(`✓ ${modules.name} 预测完成: ${predictions.length} 组`);
+      }
+    } catch (predictError) {
+      console.error(`${modules.name} 预测失败:`, predictError);
+      console.error(`错误堆栈:`, predictError.stack);
+      // 预测失败也继续，返回空数组
+    }
     
     return {
       type: type,
@@ -359,13 +362,13 @@ async function runDailyTask(env) {
     const hasNewData = results.some(r => r.hasNewData);
     const hasPredictions = results.some(r => r.predictions && r.predictions.length > 0);
     
-    // 总是发送 Telegram 通知（无论是否有新数据，只要有预测结果）
+    // 总是发送 Telegram 通知（无论是否有新数据，只要处理成功就发送）
     // 为每个彩票类型单独发送消息，避免消息过长被截断
     for (const result of results) {
-      // 只发送成功且有预测结果的彩票类型
+      // 检查是否有预测结果
       if (!result.predictions || result.predictions.length === 0) {
-        console.log(`${result.name} 无预测结果，跳过通知`);
-        continue;
+        console.warn(`${result.name} 无预测结果，但仍然发送通知`);
+        // 不要 continue，继续发送通知（即使没有预测结果）
       }
       
       // 构建单个彩票类型的消息（简洁格式）
@@ -391,13 +394,15 @@ async function runDailyTask(env) {
           }
         }
       } else {
-        message += `❌ 无法生成预测\n`;
+        // 没有预测结果时的提示
+        message += `⚠️ 暂时无法生成预测\n`;
+        message += `请稍后再试或检查数据状态\n`;
       }
       
       message += `━━━━━━━━━━━━━━━\n`;
       message += `⚠️ 仅供参考，理性购彩`;
       
-      // 发送单个彩票类型的消息
+      // 总是发送消息（即使没有预测结果）
       console.log(`\n发送 ${result.name} Telegram 通知...`);
       await telegram.sendMessage(message);
       console.log(`✓ ${result.name} Telegram 通知已发送`);
