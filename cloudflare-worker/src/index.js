@@ -512,20 +512,28 @@ export default {
         const data = await spider.fetch(startIssue, endIssue);
         
         if (!data || data.length === 0) {
-          // 网站API返回空数据，直接停止（交给增量任务处理遗漏）
+          // 网站API返回空数据，需要判断是否应该跨年
           const currentTotal = await db.getCount(type);
           
+          // 检查当前批次是否到了年底
+          const currentYear = parseInt(startIssue.substring(0, 2));
+          const currentIssueNum = parseInt(startIssue.substring(2));
+          const endIssueNum = parseInt(endIssue.substring(2));
+          const isEndOfYear = endIssueNum >= 200 || (currentIssueNum > 150 && endIssueNum >= 190);
+          
           console.log(`\n========================================`);
-          console.log(`✅ ${modules.name} 本批次无数据，停止爬取`);
+          console.log(`⚠️  ${modules.name} 本批次无数据`);
           console.log(`   查询范围: ${startIssue} - ${endIssue}`);
           console.log(`   当前总计: ${currentTotal} 条`);
-          console.log(`   💡 如有遗漏，增量任务会自动补齐`);
+          console.log(`   年底检查: ${isEndOfYear ? '是' : '否'} (当前年份: 20${currentYear})`);
           console.log(`========================================\n`);
           
           return new Response(
             JSON.stringify({
               success: true,
-              message: `${modules.name} 数据已完整，所有历史数据已存在`,
+              message: isEndOfYear ? 
+                `${modules.name} 当年数据爬取完成，建议跨年继续` : 
+                `${modules.name} 数据已完整，所有历史数据已存在`,
               inserted: 0,
               skipped: 0,
               total: currentTotal,
@@ -535,8 +543,12 @@ export default {
                 start: startIssue,
                 end: endIssue
               },
-              hasMore: false,
-              note: '本批次无数据，初始化完成。如有遗漏，增量任务会自动补齐'
+              hasMore: isEndOfYear, // 如果到了年底，建议跨年继续
+              needsCrossYear: isEndOfYear,
+              currentYear: 2000 + currentYear,
+              note: isEndOfYear ? 
+                '当年数据爬取完成，建议跨年继续爬取' : 
+                '本批次无数据，初始化完成'
             }),
             {
               headers: { 'Content-Type': 'application/json; charset=utf-8' }

@@ -238,10 +238,17 @@ while true; do
       echo ""
       echo "⚠️  本批次没有新增数据（连续 $no_new_data_count 次）"
       
-      # 检查 hasMore 字段，如果为 false 则直接停止
+      # 检查是否需要跨年
+      needsCrossYear=$(echo "$response" | jq -r '.needsCrossYear // false' 2>/dev/null)
+      currentYear=$(echo "$response" | jq -r '.currentYear // 0' 2>/dev/null)
       hasMore=$(echo "$response" | jq -r '.hasMore // true' 2>/dev/null)
       
-      if [ "$hasMore" = "false" ] || [ "$no_new_data_count" -ge "$MAX_NO_NEW_DATA" ]; then
+      if [ "$needsCrossYear" = "true" ]; then
+        echo "📅 检测到年底，当前年份: $currentYear"
+        echo "🔄 准备跨年继续爬取..."
+        # 重置无数据计数器，因为跨年是正常的
+        no_new_data_count=0
+      elif [ "$hasMore" = "false" ] || [ "$no_new_data_count" -ge "$MAX_NO_NEW_DATA" ]; then
         echo ""
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo "🎉 数据爬取完成！"
@@ -251,7 +258,9 @@ while true; do
         echo "   总执行次数: $iteration 次"
         echo "   数据库总数据量: $total 条"
         
-        if [ "$hasMore" = "false" ]; then
+        if [ "$needsCrossYear" = "true" ]; then
+          echo "   停止原因: 跨年后仍无数据，可能已完成"
+        elif [ "$hasMore" = "false" ]; then
           echo "   停止原因: API 返回 hasMore=false（智能判断已完成）"
         else
           echo "   停止原因: 连续 $no_new_data_count 次无新数据"
