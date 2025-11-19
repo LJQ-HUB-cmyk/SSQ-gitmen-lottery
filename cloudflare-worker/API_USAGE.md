@@ -41,7 +41,7 @@ curl https://your-worker.workers.dev/predict/dlt
 
 **接口**：`POST /init/{type}`
 
-**说明**：初始化数据库并按年份批量导入历史数据
+**说明**：初始化数据库并智能导入历史数据（使用统一的增量爬取逻辑）
 
 **参数**：
 - `{type}`：彩票类型（`ssq` 或 `dlt`）
@@ -60,11 +60,11 @@ curl https://your-worker.workers.dev/predict/dlt
 
 **直接调用 API**：
 ```bash
-# 双色球
+# 双色球（从 2003 年开始）
 curl -X POST https://your-worker.workers.dev/init/ssq \
   -H "Authorization: Bearer YOUR_API_KEY"
 
-# 大乐透
+# 大乐透（从 2007 年开始）
 curl -X POST https://your-worker.workers.dev/init/dlt \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
@@ -73,26 +73,38 @@ curl -X POST https://your-worker.workers.dev/init/dlt \
 ```json
 {
   "success": true,
-  "message": "2025 年数据爬取完成",
-  "inserted": 131,
+  "message": "双色球数据爬取完成",
+  "inserted": 133,
   "skipped": 0,
-  "total": 2799,
-  "year": 2025,
+  "total": 3378,
+  "dataSource": "500.com",
+  "queryParams": {
+    "start": "25134",
+    "end": "25200"
+  },
   "hasMore": false,
-  "lotteryType": "dlt"
+  "lotteryType": "ssq",
+  "note": "所有历史数据可能已爬取完成"
 }
 ```
 
+**新逻辑优势**：
+- 🚀 **智能增量**：从数据库最新期号开始爬取，避免重复
+- 🎯 **智能判断**：通过 `hasMore` 字段智能判断是否完成
+- ⚡ **高效率**：通常 1-2 次调用即可完成，减少 80%+ API 调用
+- 🔄 **复用逻辑**：使用与定时任务相同的增量爬取方法
+
 **说明**：
-- 每次调用爬取一年的数据
-- 如果 `hasMore: true`，需要继续调用直到完成
+- 如果 `hasMore: false`，说明已完成，无需继续调用
+- 如果 `hasMore: true`，建议继续调用直到完成
 - 自动跳过已存在的数据
+- 数据源：500.com（稳定可靠）
 
 ### 2. 手动执行每日任务
 
 **接口**：`POST /run`
 
-**说明**：手动触发每日任务（同时处理所有彩票类型：爬取最新数据并预测）
+**说明**：手动触发每日任务（同时处理所有彩票类型：增量爬取 + 预测）
 
 **认证**：需要 API Key
 
@@ -113,23 +125,41 @@ curl -X POST https://your-worker.workers.dev/run \
       "name": "双色球",
       "success": true,
       "hasNewData": true,
-      "latest": { ... },
+      "new_count": 1,
+      "latest": {
+        "lottery_no": "2025133",
+        "draw_date": "2025-11-18",
+        "red_balls": ["05", "14", "17", "19", "20", "33"],
+        "blue_ball": "07"
+      },
       "predictions": [ ... ]
     },
     {
       "type": "dlt",
       "name": "大乐透",
       "success": true,
-      "hasNewData": false
+      "hasNewData": false,
+      "latest": {
+        "lottery_no": "2025131",
+        "draw_date": "2025-11-17"
+      }
     }
   ]
 }
 ```
 
+**执行逻辑（统一的增量爬取）**：
+1. 获取数据库最新期号
+2. 计算爬取范围（下一期 -> 当年最后一期）
+3. 调用 `spider.fetch(startIssue, endIssue)` 爬取所有新数据
+4. 批量入库（自动跳过已存在）
+5. 如有新数据则进行预测
+6. 发送 Telegram 通知
+
 **说明**：
 - 同时处理双色球和大乐透
-- 如有新数据则自动入库并预测
-- 发送综合的 Telegram 通知
+- 使用统一的增量爬取逻辑（与 Python 版本一致）
+- 只在有新数据时发送 Telegram 通知
 
 ### 3. 查询最新数据
 
@@ -647,5 +677,6 @@ curl -X POST https://your-worker.workers.dev/init/dlt \
 
 ---
 
-**版本**：2.0.0  
-**更新日期**：2025-11-18
+**版本**：3.0.0  
+**更新日期**：2025-11-18  
+**重大更新**：统一增量爬取逻辑

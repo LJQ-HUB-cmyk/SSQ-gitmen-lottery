@@ -81,7 +81,14 @@ function extractLotteryType(pathname) {
 
 /**
  * 处理单个彩票类型的增量更新和预测
- * 免费计划优化：添加超时保护
+ * 
+ * 核心逻辑：
+ * 1. 从数据库获取最新期号
+ * 2. 从下一期开始爬取到当年最后一期（如 25134 -> 25200）
+ * 3. 入库所有新数据（自动跳过已存在的）
+ * 4. 如果有新数据，进行预测
+ * 
+ * 注意：此逻辑与 Python 版本完全一致
  */
 async function processSingleLottery(type, env, config) {
   const modules = getLotteryModules(type);
@@ -96,61 +103,80 @@ async function processSingleLottery(type, env, config) {
   const maxProcessTime = 3000; // 单个彩票类型最大处理时间 3 秒
   
   try {
-    // 并行获取数据库最新记录和线上最新数据（优化：减少串行等待）
-    const [latestInDb, latestOnline] = await Promise.all([
-      db.getLatest(type),
-      spider.fetchLatest()
-    ]);
+    // 获取数据库中最新期号
+    const latestInDb = await db.getLatest(type);
     
-    console.log(`数据库最新记录: ${latestInDb ? `${latestInDb.lottery_no} (${latestInDb.draw_date})` : '无数据'}`);
+    // 确定爬取范围
+    const currentYear = new Date().getFullYear();
+    const yearShort = currentYear.toString().substring(2); // 25
     
-    if (!latestOnline) {
-      console.log('⚠ 未获取到线上数据');
+    let startIssue;
+    
+    if (latestInDb) {
+      // 从数据库最新期号的下一期开始爬取
+      const latestNo = latestInDb.lottery_no; // 2025133
+      console.log(`数据库最新期号: ${latestNo}`);
+      
+      // 解析期号：2025133 -> 25, 133
+      const yearPart = latestNo.substring(2, 4); // 25
+      const issuePart = parseInt(latestNo.substring(4)); // 133
+      
+      // 下一期
+      const nextIssue = issuePart + 1;
+      startIssue = `${yearPart}${nextIssue.toString().padStart(3, '0')}`; // 25134
+    } else {
+      // 数据库为空，从当年第一期开始
+      startIssue = `${yearShort}001`;
+      console.log('数据库为空，从当年第一期开始');
+    }
+    
+    const endIssue = `${yearShort}200`;
+    
+    console.log(`爬取期号范围: ${startIssue} - ${endIssue}`);
+    
+    // 调用统一的 fetch 方法
+    const data = await spider.fetch(startIssue, endIssue);
+    
+    let inserted = 0;
+    if (data && data.length > 0) {
+      console.log(`获取 ${data.length} 条数据`);
+      const result = await db.batchInsert(type, data);
+      inserted = result.inserted;
+      console.log(`入库: 新增 ${result.inserted} 条，跳过 ${result.skipped} 条`);
+      
+      if (inserted > 0) {
+        console.log(`✓ 发现并入库 ${inserted} 条新数据`);
+      } else {
+        console.log('✓ 暂无新数据');
+      }
+    } else {
+      console.log('✓ 暂无新数据');
+    }
+    
+    // 获取最新一期（用于返回和显示）
+    const latest = await db.getLatest(type);
+    
+    if (!latest) {
       return {
         type: type,
         name: modules.name,
-        success: false,
-        message: '未获取到线上数据'
+        success: true,
+        message: '暂无数据',
+        hasNewData: false
       };
     }
     
-    console.log(`线上最新记录: ${latestOnline.lottery_no} (${latestOnline.draw_date})`);
-    
-    // 比较数据库和线上的最新记录
-    if (latestInDb && latestInDb.lottery_no === latestOnline.lottery_no) {
-      console.log('✓ 数据已是最新，无需更新');
+    // 如果没有新数据，直接返回
+    if (inserted === 0) {
       return {
         type: type,
         name: modules.name,
         success: true,
         message: '数据已是最新',
         hasNewData: false,
-        lottery_no: latestInDb.lottery_no,
-        draw_date: latestInDb.draw_date
+        latest: latest
       };
     }
-    
-    // 有新数据，检查是否已存在（优化：只在期号不同时才检查）
-    console.log('检测到新数据，检查是否需要入库...');
-    const exists = await db.checkExists(type, latestOnline.lottery_no);
-    
-    if (exists) {
-      console.log(`✓ 期号 ${latestOnline.lottery_no} 已存在数据库`);
-      return {
-        type: type,
-        name: modules.name,
-        success: true,
-        message: '数据已存在',
-        hasNewData: false,
-        lottery_no: latestOnline.lottery_no,
-        draw_date: latestOnline.draw_date
-      };
-    }
-    
-    // 新数据，入库
-    console.log(`准备入库新数据: ${latestOnline.lottery_no} (${latestOnline.draw_date})`);
-    const result = await db.batchInsert(type, [latestOnline]);
-    console.log(`✓ 入库完成: 新增 ${result.inserted} 条`);
     
     // 检查是否超时
     if (Date.now() - startTime > maxProcessTime) {
@@ -161,8 +187,8 @@ async function processSingleLottery(type, env, config) {
         success: true,
         message: '增量更新完成（跳过预测）',
         hasNewData: true,
-        new_count: result.inserted,
-        latest: latestOnline,
+        new_count: inserted,
+        latest: latest,
         predictions: []
       };
     }
@@ -180,8 +206,8 @@ async function processSingleLottery(type, env, config) {
       success: true,
       message: '增量更新完成',
       hasNewData: true,
-      new_count: result.inserted,
-      latest: latestOnline,
+      new_count: inserted,
+      latest: latest,
       predictions: predictions
     };
     
@@ -235,57 +261,57 @@ async function runDailyTask(env) {
     
     // 只在有新数据时发送 Telegram 通知
     if (hasNewData) {
-      let message = '🎰 <b>彩票预测系统 - 每日更新</b>\n\n';
-      
+      // 为每个彩票类型单独发送消息，避免消息过长被截断
       for (const result of results) {
-        // 只显示有新数据的彩票类型
         if (!result.hasNewData) continue;
         
-        message += `━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-        message += `<b>${result.name}</b>\n\n`;
+        // 构建单个彩票类型的消息（使用与 Python 版本一致的格式）
+        let message = `🔮 <b>${result.name}预测</b>\n\n`;
         
         const latest = result.latest;
         message += `📅 最新开奖: ${latest.lottery_no} (${latest.draw_date})\n`;
         
         if (result.type === 'ssq') {
-          message += `🔴 号码: ${latest.red_balls.join(',')} + ${latest.blue_ball}\n\n`;
+          const redStr = latest.red_balls.map(b => String(b).padStart(2, '0')).join(' ');
+          message += `🔴 红球: <code>${redStr}</code>\n`;
+          message += `� 蓝球: <codte>${String(latest.blue_ball).padStart(2, '0')}</code>\n\n`;
         } else {
-          const frontStr = latest.front_balls.map(b => String(b).padStart(2, '0')).join(',');
-          const backStr = latest.back_balls.map(b => String(b).padStart(2, '0')).join(',');
-          message += `🔴 号码: 前区 ${frontStr} | 后区 ${backStr}\n\n`;
+          const frontStr = latest.front_balls.map(b => String(b).padStart(2, '0')).join(' ');
+          const backStr = latest.back_balls.map(b => String(b).padStart(2, '0')).join(' ');
+          message += `🔴 前区: <code>${frontStr}</code>\n`;
+          message += `🔵 后区: <code>${backStr}</code>\n\n`;
         }
         
-        // 预测结果（只显示前2组，免费计划优化）
+        // 预测结果（使用与 Python 版本一致的格式）
         if (result.predictions && Array.isArray(result.predictions) && result.predictions.length > 0) {
-          message += `🔮 <b>预测下一期（${result.predictions.length} 组）</b>\n`;
-          const showCount = Math.min(2, result.predictions.length);
-          for (let i = 0; i < showCount; i++) {
+          // 显示所有预测组合（不限制数量，因为单独发送）
+          for (let i = 0; i < result.predictions.length; i++) {
             const pred = result.predictions[i];
+            const strategyName = pred.strategy_name || pred.strategy || '未知策略';
+            
+            message += `<b>组合 ${i + 1}:</b> <i>[${strategyName}]</i>\n`;
+            
             if (result.type === 'ssq') {
-              const redStr = pred.red_balls.map(b => String(b).padStart(2, '0')).join(',');
-              message += `  ${i + 1}. ${redStr} + ${String(pred.blue_ball).padStart(2, '0')}\n`;
+              const redStr = pred.red_balls.map(b => String(b).padStart(2, '0')).join(' ');
+              message += `🔴 <code>${redStr}</code>\n`;
+              message += `🔵 <code>${String(pred.blue_ball).padStart(2, '0')}</code>\n\n`;
             } else {
-              const frontStr = pred.front_balls.map(b => String(b).padStart(2, '0')).join(',');
-              const backStr = pred.back_balls.map(b => String(b).padStart(2, '0')).join(',');
-              message += `  ${i + 1}. ${frontStr} | ${backStr}\n`;
+              const frontStr = pred.front_balls.map(b => String(b).padStart(2, '0')).join(' ');
+              const backStr = pred.back_balls.map(b => String(b).padStart(2, '0')).join(' ');
+              message += `🔴 前区: <code>${frontStr}</code>\n`;
+              message += `🔵 后区: <code>${backStr}</code>\n\n`;
             }
           }
-          
-          if (result.predictions.length > showCount) {
-            message += `  ... 还有 ${result.predictions.length - showCount} 组\n`;
-          }
         }
         
-        message += '\n';
+        message += `━━━━━━━━━━━━━━━\n`;
+        message += `⚠️ 仅供参考，理性购彩`;
+        
+        // 发送单个彩票类型的消息
+        console.log(`\n发送 ${result.name} Telegram 通知...`);
+        await telegram.sendMessage(message);
+        console.log(`✓ ${result.name} Telegram 通知已发送`);
       }
-      
-      message += `━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-      message += `⏰ 更新时间: ${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}\n`;
-      
-      // 发送 Telegram 通知
-      console.log('\n发送 Telegram 通知...');
-      await telegram.sendMessage(message);
-      console.log('✓ Telegram 通知已发送');
     } else {
       console.log('\n无新数据，跳过 Telegram 通知');
     }
@@ -399,10 +425,10 @@ export default {
       }
     }
     
-    // 初始化数据库（批次爬取模式）
+    // 初始化数据库（智能增量模式）
     // 用途：首次运行时批量导入历史数据
-    // 逻辑：每次爬取一年的数据（001-200 期），按年份正序（从 2003 年往后）
-    // 特点：避免 Worker 单次调用限制，可多次执行直到完成，期号越新 ID 越大
+    // 逻辑：使用统一的增量爬取方法，从数据库最新期号开始爬取
+    // 特点：复用增量逻辑，智能判断是否完成，避免无效重试
     if (url.pathname.startsWith('/init') && request.method === 'POST') {
       // 提取彩票类型：/init/ssq 或 /init/dlt，默认 ssq
       const type = extractLotteryType(url.pathname) || 'ssq';
@@ -414,49 +440,74 @@ export default {
         const spider = new modules.spider();
         
         console.log(`\n========================================`);
-        console.log(`🎯 开始按年份爬取 ${modules.name} 历史数据（批次模式）`);
+        console.log(`🎯 开始爬取 ${modules.name} 历史数据（智能增量模式）`);
         console.log(`========================================`);
         
-        // 获取起始年份
+        // 获取数据库最新期号
+        const latestInDb = await db.getLatest(type);
+        
+        // 确定爬取范围
         const currentYear = new Date().getFullYear();
-        const startYear = modules.startYear;
-        const dataSource = '500.com';
+        const yearShort = currentYear.toString().substring(2);
         
-        // 查找数据库中缺失的年份
-        // 策略：从最早年份往后查找，找到第一个缺失数据的年份
-        // 这样期号越新 ID 也越大，数据更有序
-        let targetYear = null;
+        let startIssue, endIssue;
         
-        for (let year = startYear; year <= currentYear; year++) {
-          const yearShort = year.toString().substring(2);
-          const firstIssue = `20${yearShort}001`; // 7位格式：2003001
+        if (latestInDb) {
+          // 从数据库最新期号的下一期开始爬取
+          const latestNo = latestInDb.lottery_no;
+          console.log(`数据库最新期号: ${latestNo}`);
           
-          // 检查该年份的第一期是否存在
-          const exists = await db.checkExists(type, firstIssue);
+          // 解析期号：2025133 -> 25, 133
+          const yearPart = latestNo.substring(2, 4);
+          const issuePart = parseInt(latestNo.substring(4));
           
-          if (!exists) {
-            targetYear = year;
-            break;
+          // 下一期
+          const nextIssue = issuePart + 1;
+          startIssue = `${yearPart}${nextIssue.toString().padStart(3, '0')}`;
+          
+          // 如果跨年了，从新年第一期开始
+          if (nextIssue > 200) {
+            const nextYear = parseInt(yearPart) + 1;
+            startIssue = `${nextYear.toString().padStart(2, '0')}001`;
           }
+        } else {
+          // 数据库为空，从起始年份开始
+          const startYear = modules.startYear;
+          const startYearShort = startYear.toString().substring(2);
+          startIssue = `${startYearShort}001`;
+          console.log('数据库为空，从起始年份开始');
         }
         
-        // 如果没有找到缺失的年份，说明数据已完整
-        if (!targetYear) {
+        // 结束期号：当年最后一期
+        endIssue = `${yearShort}200`;
+        
+        console.log(`爬取期号范围: ${startIssue} - ${endIssue}`);
+        
+        // 调用统一的 fetch 方法
+        const data = await spider.fetch(startIssue, endIssue);
+        
+        if (!data || data.length === 0) {
+          // 没有新数据，说明已经是最新的
           const currentTotal = await db.getCount(type);
           console.log(`\n========================================`);
-          console.log(`✅ ${modules.name} 数据已完整，无需爬取`);
+          console.log(`✅ ${modules.name} 数据已是最新，无需爬取`);
           console.log(`   当前总计: ${currentTotal} 条`);
           console.log(`========================================\n`);
           
           return new Response(
             JSON.stringify({
               success: true,
-              message: `${modules.name} 数据已完整，所有年份数据已存在`,
+              message: `${modules.name} 数据已完整，所有历史数据已存在`,
               inserted: 0,
               skipped: 0,
               total: currentTotal,
-              dataSource: dataSource,
+              dataSource: '500.com',
               lotteryType: type,
+              queryParams: {
+                start: startIssue,
+                end: endIssue
+              },
+              hasMore: false,
               note: '历史数据已全部爬取完成'
             }),
             {
@@ -465,93 +516,53 @@ export default {
           );
         }
         
-        // 爬取目标年份的数据
-        const yearShort = targetYear.toString().substring(2);
-        const startIssue = `${yearShort}001`; // 5位格式：03001
-        const endIssue = `${yearShort}200`;   // 5位格式：03200
+        console.log(`✓ 获取 ${data.length} 条数据`);
         
-        console.log(`\n📅 爬取 ${targetYear} 年数据 (期号: ${startIssue} - ${endIssue})`);
+        // 批量插入（自动跳过已存在的数据）
+        const result = await db.batchInsert(type, data);
+        console.log(`✓ 入库: 新增 ${result.inserted} 条，跳过 ${result.skipped} 条`);
         
-        try {
-          // 使用 500.com 爬取该年度数据
-          const yearData = await spider.fetch500comByRange(startIssue, endIssue);
-          
-          if (!yearData || yearData.length === 0) {
-            console.log(`   ⚠ ${targetYear} 年无数据`);
-            
-            return new Response(
-              JSON.stringify({
-                success: false,
-                message: `${modules.name} ${targetYear} 年无数据`,
-                total: await db.getCount(type),
-                lotteryType: type
-              }),
-              {
-                headers: { 'Content-Type': 'application/json; charset=utf-8' }
-              }
-            );
-          }
-          
-          console.log(`   ✓ 获取 ${yearData.length} 条数据`);
-          
-          // 批量插入（自动跳过已存在的数据）
-          const result = await db.batchInsert(type, yearData);
-          console.log(`   ✓ 入库: 新增 ${result.inserted} 条，跳过 ${result.skipped} 条`);
-          
-          const currentTotal = await db.getCount(type);
-          
-          // 检查是否还有更多年份需要爬取
-          let hasMore = false;
-          for (let year = targetYear + 1; year <= currentYear; year++) {
-            const yearShort = year.toString().substring(2);
-            const firstIssue = `20${yearShort}001`;
-            const exists = await db.checkExists(type, firstIssue);
-            if (!exists) {
-              hasMore = true;
-              break;
-            }
-          }
-          
-          console.log(`\n========================================`);
-          console.log(`✅ ${modules.name} ${targetYear} 年爬取完成`);
-          console.log(`   新增: ${result.inserted} 条`);
-          console.log(`   跳过: ${result.skipped} 条`);
-          console.log(`   当前总计: ${currentTotal} 条`);
-          if (hasMore) {
-            console.log(`   💡 提示: 还有更新年份的数据需要爬取，请继续执行 /init/${type}`);
-          } else {
-            console.log(`   🎉 ${modules.name} 所有历史数据已爬取完成！`);
-          }
-          console.log(`========================================\n`);
-          
-          // 注意：初始化不发送 Telegram 通知，只有增量更新和预测才发送
-          console.log('初始化完成，不发送 Telegram 通知');
-          
-          return new Response(
-            JSON.stringify({
-              success: true,
-              message: `${modules.name} ${targetYear} 年数据爬取完成`,
-              inserted: result.inserted,
-              skipped: result.skipped,
-              total: currentTotal,
-              dataSource: dataSource,
-              lotteryType: type,
-              queryParams: {
-                start: startIssue,
-                end: endIssue
-              },
-              year: targetYear,
-              hasMore: hasMore,
-              note: hasMore ? '还有更新年份的数据需要爬取' : `${modules.name} 所有历史数据已爬取完成`
-            }),
-            {
-              headers: { 'Content-Type': 'application/json; charset=utf-8' }
-            }
-          );
-        } catch (error) {
-          console.error(`   ✗ 爬取 ${targetYear} 年失败: ${error.message}`);
-          throw error;
+        const currentTotal = await db.getCount(type);
+        
+        // 智能判断是否还有更多数据
+        // 如果本次爬取的数据量很少（< 10条），可能接近完成
+        const hasMore = data.length >= 10;
+        
+        console.log(`\n========================================`);
+        console.log(`✅ ${modules.name} 本次爬取完成`);
+        console.log(`   新增: ${result.inserted} 条`);
+        console.log(`   跳过: ${result.skipped} 条`);
+        console.log(`   当前总计: ${currentTotal} 条`);
+        if (hasMore) {
+          console.log(`   💡 提示: 可能还有更多数据，请继续执行 /init/${type}`);
+        } else {
+          console.log(`   🎉 ${modules.name} 所有历史数据可能已爬取完成！`);
         }
+        console.log(`========================================\n`);
+        
+        // 注意：初始化不发送 Telegram 通知，只有增量更新和预测才发送
+        console.log('初始化完成，不发送 Telegram 通知');
+        
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: `${modules.name} 数据爬取完成`,
+            inserted: result.inserted,
+            skipped: result.skipped,
+            total: currentTotal,
+            dataSource: '500.com',
+            lotteryType: type,
+            queryParams: {
+              start: startIssue,
+              end: endIssue
+            },
+            hasMore: hasMore,
+            note: hasMore ? '可能还有更多数据需要爬取' : `${modules.name} 所有历史数据可能已爬取完成`
+          }),
+          {
+            headers: { 'Content-Type': 'application/json; charset=utf-8' }
+          }
+        );
       } catch (error) {
         console.error('初始化失败:', error);
         return new Response(

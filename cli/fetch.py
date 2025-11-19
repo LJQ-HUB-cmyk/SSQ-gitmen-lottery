@@ -26,15 +26,33 @@ def setup_logging(lottery_type: str):
 
 
 def fetch_full_history(lottery_type: str):
-    """爬取全量历史数据"""
+    """
+    爬取全量历史数据（逐年推进模式）
+    
+    循环爬取所有缺失年份，直到完成
+    避免访问量过大，智能判断何时停止
+    """
     setup_logging(lottery_type)
     
     logger.info("=" * 60)
-    logger.info(f"开始爬取{LOTTERY_NAMES.get(lottery_type, lottery_type)}全量历史数据")
+    logger.info(f"开始爬取{LOTTERY_NAMES.get(lottery_type, lottery_type)}全量历史数据（逐年推进模式）")
     logger.info("=" * 60)
     
-    # 动态导入对应的模块
     try:
+        # 获取起始年份
+        start_years = {'ssq': 2003, 'dlt': 2007}
+        if lottery_type not in start_years:
+            logger.error(f"暂不支持彩票类型: {lottery_type}")
+            return
+        
+        start_year = start_years[lottery_type]
+        current_year = datetime.now().year
+        
+        logger.info(f"彩票类型: {LOTTERY_NAMES.get(lottery_type)}")
+        logger.info(f"起始年份: {start_year}")
+        logger.info(f"当前年份: {current_year}")
+        
+        # 动态导入对应的模块
         if lottery_type == 'ssq':
             from lotteries.ssq.spider import SSQSpider
             from lotteries.ssq.database import SSQDatabase
@@ -45,50 +63,69 @@ def fetch_full_history(lottery_type: str):
             db.connect()
             db.create_table()
             
-            # 双色球从2003年开始
-            current_year = datetime.now().year
-            start_year = 2003
-            
             total_inserted = 0
-            total_skipped = 0
+            year_count = 0
             
-            for year in range(start_year, current_year + 1):
-                year_short = str(year)[2:]
-                start_issue = f"{year_short}001"
-                end_issue = f"{year_short}200"
+            # 循环爬取所有缺失年份
+            while True:
+                # 查找数据库中缺失的年份（从最早年份往后查找）
+                target_year = None
                 
-                logger.info(f"\n爬取 {year} 年数据 (期号: {start_issue} - {end_issue})")
-                
-                try:
-                    year_data = spider.fetch_500com_data(start_issue, end_issue)
+                for year in range(start_year, current_year + 1):
+                    year_short = str(year)[2:]
+                    first_issue = f"20{year_short}001"  # 7位格式：2003001
                     
-                    if year_data:
-                        logger.info(f"  获取 {len(year_data)} 条数据")
-                        inserted, duplicated, skipped = db.insert_lottery_data(year_data, skip_existing=True)
-                        logger.info(f"  入库: 新增 {inserted} 条，重复 {duplicated} 条，跳过 {skipped} 条")
-                        total_inserted += inserted
-                        total_skipped += skipped
-                    else:
-                        logger.warning(f"  {year} 年无数据")
-                        
-                except Exception as e:
-                    logger.error(f"  爬取 {year} 年失败: {e}")
+                    # 检查该年份的第一期是否存在
+                    latest = db.get_latest_lottery()
+                    if not latest or latest['lottery_no'] < first_issue:
+                        target_year = year
+                        break
+                
+                # 如果没有找到缺失的年份，说明数据已完整
+                if not target_year:
+                    total = db.get_total_count('ssq_lottery')
+                    latest = db.get_latest_lottery()
+                    
+                    logger.info("\n" + "=" * 60)
+                    logger.info("✅ 双色球全量爬取完成")
+                    logger.info("=" * 60)
+                    logger.info(f"爬取年份数: {year_count}")
+                    logger.info(f"新增数据: {total_inserted} 条")
+                    logger.info(f"数据库总记录数: {total}")
+                    if latest:
+                        logger.info(f"最新一期: {latest['lottery_no']} ({latest['draw_date']})")
+                        logger.info(f"号码: {latest['red_balls']} + {latest['blue_ball']}")
+                    logger.info("=" * 60)
+                    
+                    db.close()
+                    return
+                
+                # 爬取目标年份的数据
+                year_count += 1
+                year_short = str(target_year)[2:]
+                start_issue = f"{year_short}001"  # 5位格式：03001
+                end_issue = f"{year_short}200"    # 5位格式：03200
+                
+                logger.info(f"\n📅 爬取第 {year_count} 年: {target_year} 年数据 (期号: {start_issue} - {end_issue})")
+                
+                # 使用统一的 fetch 方法爬取该年度数据
+                data = spider.fetch(start_issue=start_issue, end_issue=end_issue)
+                
+                if not data or len(data) == 0:
+                    logger.warning(f"   ⚠️ {target_year} 年无数据，跳过")
                     continue
-            
-            logger.info("\n" + "=" * 60)
-            logger.info(f"爬取完成，新增 {total_inserted} 条，跳过 {total_skipped} 条")
-            logger.info("=" * 60)
-            
-            # 显示统计
-            total = db.get_total_count('ssq_lottery')
-            latest = db.get_latest_lottery()
-            
-            logger.info(f"数据库总记录数: {total}")
-            if latest:
-                logger.info(f"最新一期: {latest['lottery_no']} ({latest['draw_date']})")
-                logger.info(f"号码: {latest['red_balls']} + {latest['blue_ball']}")
-            
-            db.close()
+                
+                logger.info(f"   ✅ 获取 {len(data)} 条数据")
+                
+                # 批量插入（自动跳过已存在的数据）
+                inserted, duplicated, skipped = db.insert_lottery_data(data, skip_existing=True)
+                logger.info(f"   ✅ 入库: 新增 {inserted} 条，重复 {duplicated} 条，跳过 {skipped} 条")
+                
+                total_inserted += inserted
+                
+                # 添加延迟，避免访问过于频繁
+                import time
+                time.sleep(2)
             
         elif lottery_type == 'dlt':
             from lotteries.dlt.spider import DLTSpider
@@ -100,133 +137,282 @@ def fetch_full_history(lottery_type: str):
             db.connect()
             db.create_table()
             
-            # 大乐透从2007年开始
-            current_year = datetime.now().year
-            start_year = 2007
-            
             total_inserted = 0
-            total_skipped = 0
+            year_count = 0
             
-            for year in range(start_year, current_year + 1):
-                year_short = str(year)[2:]
-                start_issue = f"{year_short}001"
-                end_issue = f"{year_short}200"
+            # 循环爬取所有缺失年份
+            while True:
+                # 查找数据库中缺失的年份（从最早年份往后查找）
+                target_year = None
                 
-                logger.info(f"\n爬取 {year} 年数据 (期号: {start_issue} - {end_issue})")
-                
-                try:
-                    year_data = spider.fetch_500com_data(start_issue, end_issue)
+                for year in range(start_year, current_year + 1):
+                    year_short = str(year)[2:]
+                    first_issue = f"20{year_short}001"  # 7位格式：2007001
                     
-                    if year_data:
-                        logger.info(f"  获取 {len(year_data)} 条数据")
-                        inserted, duplicated, skipped = db.insert_lottery_data(year_data, skip_existing=True)
-                        logger.info(f"  入库: 新增 {inserted} 条，重复 {duplicated} 条，跳过 {skipped} 条")
-                        total_inserted += inserted
-                        total_skipped += skipped
-                    else:
-                        logger.warning(f"  {year} 年无数据")
-                        
-                except Exception as e:
-                    logger.error(f"  爬取 {year} 年失败: {e}")
+                    # 检查该年份的第一期是否存在
+                    latest = db.get_latest_lottery()
+                    if not latest or latest['lottery_no'] < first_issue:
+                        target_year = year
+                        break
+                
+                # 如果没有找到缺失的年份，说明数据已完整
+                if not target_year:
+                    total = db.get_total_count('dlt_lottery')
+                    latest = db.get_latest_lottery()
+                    
+                    logger.info("\n" + "=" * 60)
+                    logger.info("✅ 大乐透全量爬取完成")
+                    logger.info("=" * 60)
+                    logger.info(f"爬取年份数: {year_count}")
+                    logger.info(f"新增数据: {total_inserted} 条")
+                    logger.info(f"数据库总记录数: {total}")
+                    if latest:
+                        logger.info(f"最新一期: {latest['lottery_no']} ({latest['draw_date']})")
+                        front_str = ','.join([f"{int(b):02d}" for b in latest['front_balls']])
+                        back_str = ','.join([f"{int(b):02d}" for b in latest['back_balls']])
+                        logger.info(f"号码: 前区 {front_str} | 后区 {back_str}")
+                    logger.info("=" * 60)
+                    
+                    db.close()
+                    return
+                
+                # 爬取目标年份的数据
+                year_count += 1
+                year_short = str(target_year)[2:]
+                start_issue = f"{year_short}001"  # 5位格式：07001
+                end_issue = f"{year_short}200"    # 5位格式：07200
+                
+                logger.info(f"\n📅 爬取第 {year_count} 年: {target_year} 年数据 (期号: {start_issue} - {end_issue})")
+                
+                # 使用统一的 fetch 方法爬取该年度数据
+                data = spider.fetch(start_issue=start_issue, end_issue=end_issue)
+                
+                if not data or len(data) == 0:
+                    logger.warning(f"   ⚠️ {target_year} 年无数据，跳过")
                     continue
+                
+                logger.info(f"   ✅ 获取 {len(data)} 条数据")
+                
+                # 批量插入（自动跳过已存在的数据）
+                inserted, duplicated, skipped = db.insert_lottery_data(data, skip_existing=True)
+                logger.info(f"   ✅ 入库: 新增 {inserted} 条，重复 {duplicated} 条，跳过 {skipped} 条")
+                
+                total_inserted += inserted
+                
+                # 添加延迟，避免访问过于频繁
+                import time
+                time.sleep(2)
+        
+    except Exception as e:
+        logger.error(f"全量爬取失败: {e}", exc_info=True)
+
+
+def fetch_incremental_data(lottery_type: str, with_predict: bool = False):
+    """
+    增量爬取最新数据（核心方法）
+    
+    Args:
+        lottery_type: 彩票类型 ('ssq' 或 'dlt')
+        with_predict: 是否在爬取后进行预测（定时任务使用）
+        
+    Returns:
+        dict: 包含爬取结果和预测结果（如果 with_predict=True）
+    """
+    logger.info(f"{'=' * 60}")
+    logger.info(f"增量爬取 {LOTTERY_NAMES.get(lottery_type, lottery_type)}")
+    logger.info(f"{'=' * 60}")
+    
+    try:
+        if lottery_type == 'ssq':
+            from lotteries.ssq.spider import SSQSpider
+            from lotteries.ssq.database import SSQDatabase
             
-            logger.info("\n" + "=" * 60)
-            logger.info(f"爬取完成，新增 {total_inserted} 条，跳过 {total_skipped} 条")
-            logger.info("=" * 60)
+            spider = SSQSpider(timeout=15, retry_times=3)
+            db = SSQDatabase(load_db_config())
             
-            # 显示统计
-            total = db.get_total_count('dlt_lottery')
+            db.connect()
+            db.create_table()
+            
+            # 获取数据库中最新期号
+            latest_in_db = db.get_latest_lottery()
+            
+            # 确定爬取范围
+            current_year = datetime.now().year
+            year_short = str(current_year)[2:]
+            
+            if latest_in_db:
+                # 从数据库最新期号的下一期开始爬取
+                latest_no = latest_in_db['lottery_no']
+                logger.info(f"数据库最新期号: {latest_no}")
+                
+                # 解析期号：2025001 -> 25, 001
+                year_part = latest_no[2:4]
+                issue_part = int(latest_no[4:])
+                
+                # 下一期
+                next_issue = issue_part + 1
+                start_issue = f"{year_part}{next_issue:03d}"
+            else:
+                # 数据库为空，从当年第一期开始
+                start_issue = f"{year_short}001"
+                logger.info("数据库为空，从当年第一期开始")
+            
+            end_issue = f"{year_short}200"
+            
+            logger.info(f"爬取期号范围: {start_issue} - {end_issue}")
+            
+            # 调用统一的 fetch 方法
+            data = spider.fetch(start_issue=start_issue, end_issue=end_issue)
+            
+            inserted = 0
+            if data:
+                logger.info(f"获取 {len(data)} 条数据")
+                inserted, duplicated, skipped = db.insert_lottery_data(data, skip_existing=True)
+                logger.info(f"入库: 新增 {inserted} 条，重复 {duplicated} 条，跳过 {skipped} 条")
+                
+                if inserted > 0:
+                    logger.info(f"✓ 发现并入库 {inserted} 条新数据")
+                else:
+                    logger.info("✓ 暂无新数据")
+            else:
+                logger.info("✓ 暂无新数据")
+            
+            # 显示最新一期
             latest = db.get_latest_lottery()
-            
-            logger.info(f"数据库总记录数: {total}")
             if latest:
-                logger.info(f"最新一期: {latest['lottery_no']} ({latest['draw_date']})")
-                logger.info(f"号码: 前区 {latest['front_balls']} + 后区 {latest['back_balls']}")
+                logger.info(f"\n最新一期: {latest['lottery_no']} ({latest['draw_date']})")
+                logger.info(f"号码: {latest['red_balls']} + {latest['blue_ball']}")
+            
+            result = {
+                'lottery_type': lottery_type,
+                'lottery_name': LOTTERY_NAMES.get(lottery_type),
+                'inserted': inserted,
+                'latest': latest
+            }
+            
+            # 如果需要预测
+            if with_predict and latest:
+                logger.info("\n开始预测下一期号码...")
+                from lotteries.ssq.predictor import SSQPredictor
+                
+                history_data = db.get_all_lottery_data()
+                predictor = SSQPredictor(history_data)
+                predictions = predictor.predict(count=5)
+                
+                logger.info(f"预测结果（共 {len(predictions)} 组）:")
+                for i, pred in enumerate(predictions, 1):
+                    logger.info(f"  组合 {i}: {pred['red_balls']} + {pred['blue_ball']}")
+                
+                result['predictions'] = predictions
             
             db.close()
+            return result
+            
+        elif lottery_type == 'dlt':
+            from lotteries.dlt.spider import DLTSpider
+            from lotteries.dlt.database import DLTDatabase
+            
+            spider = DLTSpider(timeout=15, retry_times=3)
+            db = DLTDatabase(load_db_config())
+            
+            db.connect()
+            db.create_table()
+            
+            # 获取数据库中最新期号
+            latest_in_db = db.get_latest_lottery()
+            
+            # 确定爬取范围
+            current_year = datetime.now().year
+            year_short = str(current_year)[2:]
+            
+            if latest_in_db:
+                # 从数据库最新期号的下一期开始爬取
+                latest_no = latest_in_db['lottery_no']
+                logger.info(f"数据库最新期号: {latest_no}")
+                
+                # 解析期号：2025001 -> 25, 001
+                year_part = latest_no[2:4]
+                issue_part = int(latest_no[4:])
+                
+                # 下一期
+                next_issue = issue_part + 1
+                start_issue = f"{year_part}{next_issue:03d}"
+            else:
+                # 数据库为空，从当年第一期开始
+                start_issue = f"{year_short}001"
+                logger.info("数据库为空，从当年第一期开始")
+            
+            end_issue = f"{year_short}200"
+            
+            logger.info(f"爬取期号范围: {start_issue} - {end_issue}")
+            
+            # 调用统一的 fetch 方法
+            data = spider.fetch(start_issue=start_issue, end_issue=end_issue)
+            
+            inserted = 0
+            if data:
+                logger.info(f"获取 {len(data)} 条数据")
+                inserted, duplicated, skipped = db.insert_lottery_data(data, skip_existing=True)
+                logger.info(f"入库: 新增 {inserted} 条，重复 {duplicated} 条，跳过 {skipped} 条")
+                
+                if inserted > 0:
+                    logger.info(f"✓ 发现并入库 {inserted} 条新数据")
+                else:
+                    logger.info("✓ 暂无新数据")
+            else:
+                logger.info("✓ 暂无新数据")
+            
+            # 显示最新一期
+            latest = db.get_latest_lottery()
+            if latest:
+                logger.info(f"\n最新一期: {latest['lottery_no']} ({latest['draw_date']})")
+                front_str = ','.join([f"{int(b):02d}" for b in latest['front_balls']])
+                back_str = ','.join([f"{int(b):02d}" for b in latest['back_balls']])
+                logger.info(f"号码: 前区 {front_str} | 后区 {back_str}")
+            
+            result = {
+                'lottery_type': lottery_type,
+                'lottery_name': LOTTERY_NAMES.get(lottery_type),
+                'inserted': inserted,
+                'latest': latest
+            }
+            
+            # 如果需要预测
+            if with_predict and latest:
+                logger.info("\n开始预测下一期号码...")
+                from lotteries.dlt.predictor import DLTPredictor
+                
+                history_data = db.get_all_lottery_data()
+                predictor = DLTPredictor(history_data)
+                predictions = predictor.predict(count=5)
+                
+                logger.info(f"预测结果（共 {len(predictions)} 组）:")
+                for i, pred in enumerate(predictions, 1):
+                    front_str = ','.join([f"{int(b):02d}" for b in pred['front_balls']])
+                    back_str = ','.join([f"{int(b):02d}" for b in pred['back_balls']])
+                    logger.info(f"  组合 {i}: 前区 {front_str} | 后区 {back_str}")
+                
+                result['predictions'] = predictions
+            
+            db.close()
+            return result
             
         else:
             logger.error(f"暂不支持彩票类型: {lottery_type}")
+            return None
             
     except Exception as e:
-        logger.error(f"爬取失败: {e}", exc_info=True)
+        logger.error(f"处理失败: {e}", exc_info=True)
+        return None
 
 
 def fetch_latest(lottery_type: str):
-    """增量爬取最新数据"""
+    """增量爬取最新数据（CLI 入口）"""
     setup_logging(lottery_type)
     
     logger.info("=" * 60)
     logger.info(f"增量爬取{LOTTERY_NAMES.get(lottery_type, lottery_type)}最新数据")
     logger.info("=" * 60)
     
-    try:
-        if lottery_type == 'ssq':
-            from lotteries.ssq.spider import SSQSpider
-            from lotteries.ssq.database import SSQDatabase
-            
-            spider = SSQSpider(timeout=15, retry_times=3)
-            db = SSQDatabase(load_db_config())
-            
-            db.connect()
-            db.create_table()
-            
-            current_year = datetime.now().year
-            year_short = str(current_year)[2:]
-            start_issue = f"{year_short}001"
-            end_issue = f"{year_short}200"
-            
-            data = spider.fetch_500com_data(start_issue, end_issue)
-            
-            if data:
-                logger.info(f"获取 {len(data)} 条数据")
-                inserted, duplicated, skipped = db.insert_lottery_data(data, skip_existing=True)
-                logger.info(f"入库: 新增 {inserted} 条，重复 {duplicated} 条，跳过 {skipped} 条")
-            else:
-                logger.warning("未获取到数据")
-            
-            # 显示最新一期
-            latest = db.get_latest_lottery()
-            if latest:
-                logger.info(f"\n最新一期: {latest['lottery_no']} ({latest['draw_date']})")
-                logger.info(f"号码: {latest['red_balls']} + {latest['blue_ball']}")
-            
-            db.close()
-            
-        elif lottery_type == 'dlt':
-            from lotteries.dlt.spider import DLTSpider
-            from lotteries.dlt.database import DLTDatabase
-            
-            spider = DLTSpider(timeout=15, retry_times=3)
-            db = DLTDatabase(load_db_config())
-            
-            db.connect()
-            db.create_table()
-            
-            current_year = datetime.now().year
-            year_short = str(current_year)[2:]
-            start_issue = f"{year_short}001"
-            end_issue = f"{year_short}200"
-            
-            data = spider.fetch_500com_data(start_issue, end_issue)
-            
-            if data:
-                logger.info(f"获取 {len(data)} 条数据")
-                inserted, duplicated, skipped = db.insert_lottery_data(data, skip_existing=True)
-                logger.info(f"入库: 新增 {inserted} 条，重复 {duplicated} 条，跳过 {skipped} 条")
-            else:
-                logger.warning("未获取到数据")
-            
-            # 显示最新一期
-            latest = db.get_latest_lottery()
-            if latest:
-                logger.info(f"\n最新一期: {latest['lottery_no']} ({latest['draw_date']})")
-                logger.info(f"号码: 前区 {latest['front_balls']} + 后区 {latest['back_balls']}")
-            
-            db.close()
-            
-        else:
-            logger.error(f"暂不支持彩票类型: {lottery_type}")
-            
-    except Exception as e:
-        logger.error(f"爬取失败: {e}", exc_info=True)
+    # 调用核心方法
+    fetch_incremental_data(lottery_type, with_predict=False)

@@ -34,33 +34,35 @@ class DLTSpider:
         self.retry_times = retry_times
         self.session = requests.Session()
 
-    def fetch_latest(self, count: int = 1) -> List[Dict]:
-        """获取最新开奖数据（只使用 500.com）
+    def fetch(self, start_issue: str = None, end_issue: str = None, count: int = None) -> List[Dict]:
+        """
+        统一的爬取接口（重构版）
         
         Args:
-            count: 要获取的期数（默认1期）
+            start_issue: 起始期号（5位格式，如 '07001'），可选
+            end_issue: 结束期号（5位格式，如 '25200'），可选
+            count: 获取最新 N 条（仅当 start/end 都为 None 时使用），可选
             
         Returns:
             中奖数据列表
-        """
-        logger.info("从 500.com 获取大乐透最新数据...")
-        data = self._fetch_from_500com()
-        if data and len(data) > 0:
-            logger.info(f"成功获取 {len(data)} 条数据，返回最新 {count} 条")
-            return data[:count]
-        
-        raise Exception("未获取到数据")
-
-    def fetch_by_range(self, start_issue: str, end_issue: str) -> List[Dict]:
-        """按期号范围获取数据（用于初始化）
-        
-        Args:
-            start_issue: 开始期号（5位格式，如 '07001'）
-            end_issue: 结束期号（5位格式，如 '07200'）
             
-        Returns:
-            中奖数据列表
+        使用场景：
+            1. 全量爬取: fetch(start_issue="07001", end_issue="25200")
+            2. 增量爬取: fetch(start_issue="25132", end_issue="25200")  # 获取所有新数据
+            3. 获取最新: fetch() 或 fetch(count=1)  # 不带参数返回所有可用数据（约30条）
         """
+        # 场景1: 获取最新数据（不带参数）
+        if start_issue is None and end_issue is None:
+            logger.info("从 500.com 获取大乐透最新数据...")
+            data = self._fetch_from_500com()
+            if data and len(data) > 0:
+                # 如果指定了 count，则限制返回数量；否则返回所有数据
+                result = data[:count] if count else data
+                logger.info(f"成功获取 {len(data)} 条数据，返回 {len(result)} 条")
+                return result
+            raise Exception("未获取到数据")
+        
+        # 场景2: 按期号范围获取
         url = f"{self.BASE_URL}?start={start_issue}&end={end_issue}"
         logger.info(f"从 500.com 获取期号范围数据: {start_issue} - {end_issue}")
         
@@ -76,17 +78,18 @@ class DLTSpider:
             logger.error(f"获取数据失败: {e}")
             return []
     
+    # 兼容旧接口
+    def fetch_latest(self, count: int = 1) -> List[Dict]:
+        """获取最新数据（兼容旧接口）"""
+        return self.fetch(count=count)
+    
+    def fetch_by_range(self, start_issue: str, end_issue: str) -> List[Dict]:
+        """按期号范围获取（兼容旧接口）"""
+        return self.fetch(start_issue=start_issue, end_issue=end_issue)
+    
     def fetch_500com_data(self, start_issue: str, end_issue: str) -> List[Dict]:
-        """按期号范围获取数据（兼容旧接口）
-        
-        Args:
-            start_issue: 开始期号（5位格式，如 '07001'）
-            end_issue: 结束期号（5位格式，如 '07200'）
-            
-        Returns:
-            中奖数据列表
-        """
-        return self.fetch_by_range(start_issue, end_issue)
+        """按期号范围获取（兼容旧接口）"""
+        return self.fetch(start_issue=start_issue, end_issue=end_issue)
 
     def _fetch_from_500com(self) -> List[Dict]:
         """从 500.com 获取数据（不带参数返回最近30期）"""

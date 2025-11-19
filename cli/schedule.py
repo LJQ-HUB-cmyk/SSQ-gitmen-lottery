@@ -27,145 +27,18 @@ def setup_logging(lottery_type: str):
 
 
 def fetch_and_predict_single(lottery_type: str):
-    """单个彩票类型的增量爬取和预测"""
+    """
+    单个彩票类型的增量爬取和预测
+    
+    注意：此方法现在直接调用 fetch.py 中的核心方法，实现代码复用
+    """
     logger.info(f"\n{'=' * 60}")
     logger.info(f"处理 {LOTTERY_NAMES.get(lottery_type, lottery_type)}")
     logger.info(f"{'=' * 60}")
     
-    try:
-        if lottery_type == 'ssq':
-            from lotteries.ssq.spider import SSQSpider
-            from lotteries.ssq.database import SSQDatabase
-            
-            spider = SSQSpider(timeout=15, retry_times=3)
-            db = SSQDatabase(load_db_config())
-            
-            db.connect()
-            db.create_table()
-            
-            current_year = datetime.now().year
-            year_short = str(current_year)[2:]
-            start_issue = f"{year_short}001"
-            end_issue = f"{year_short}200"
-            
-            logger.info(f"爬取 {current_year} 年最新数据")
-            
-            data = spider.fetch_500com_data(start_issue, end_issue)
-            
-            if data:
-                logger.info(f"获取 {len(data)} 条数据")
-                inserted, duplicated, skipped = db.insert_lottery_data(data, skip_existing=True)
-                logger.info(f"入库: 新增 {inserted} 条，重复 {duplicated} 条，跳过 {skipped} 条")
-                
-                if inserted > 0:
-                    logger.info(f"✓ 发现并入库 {inserted} 条新数据")
-                else:
-                    logger.info("✓ 暂无新数据")
-            else:
-                logger.warning("未获取到数据")
-            
-            # 显示最新一期
-            latest = db.get_latest_lottery()
-            if latest:
-                logger.info(f"最新一期: {latest['lottery_no']} ({latest['draw_date']})")
-                logger.info(f"号码: {latest['red_balls']} + {latest['blue_ball']}")
-            
-            # 预测下一期
-            logger.info("\n开始预测下一期号码...")
-            from lotteries.ssq.predictor import SSQPredictor
-            
-            # 获取历史数据用于预测
-            history_data = db.get_latest_lotteries(limit=200)
-            predictor = SSQPredictor(history_data)
-            predictions = predictor.predict(count=5)
-            
-            logger.info(f"预测结果（共 {len(predictions)} 组）:")
-            for i, pred in enumerate(predictions, 1):
-                logger.info(f"  组合 {i}: {pred['red_balls']} + {pred['blue_ball']}")
-            
-            db.close()
-            
-            return {
-                'lottery_type': lottery_type,
-                'lottery_name': LOTTERY_NAMES.get(lottery_type),
-                'inserted': inserted,
-                'latest': latest,
-                'predictions': predictions
-            }
-            
-        elif lottery_type == 'dlt':
-            from lotteries.dlt.spider import DLTSpider
-            from lotteries.dlt.database import DLTDatabase
-            
-            spider = DLTSpider(timeout=15, retry_times=3)
-            db = DLTDatabase(load_db_config())
-            
-            db.connect()
-            db.create_table()
-            
-            current_year = datetime.now().year
-            year_short = str(current_year)[2:]
-            start_issue = f"{year_short}001"
-            end_issue = f"{year_short}200"
-            
-            logger.info(f"爬取 {current_year} 年最新数据")
-            
-            data = spider.fetch_500com_data(start_issue, end_issue)
-            
-            if data:
-                logger.info(f"获取 {len(data)} 条数据")
-                inserted, duplicated, skipped = db.insert_lottery_data(data, skip_existing=True)
-                logger.info(f"入库: 新增 {inserted} 条，重复 {duplicated} 条，跳过 {skipped} 条")
-                
-                if inserted > 0:
-                    logger.info(f"✓ 发现并入库 {inserted} 条新数据")
-                else:
-                    logger.info("✓ 暂无新数据")
-            else:
-                logger.warning("未获取到数据")
-            
-            # 显示最新一期
-            latest = db.get_latest_lottery()
-            if latest:
-                logger.info(f"最新一期: {latest['lottery_no']} ({latest['draw_date']})")
-                front_str = ','.join([f"{int(b):02d}" for b in latest['front_balls']])
-                back_str = ','.join([f"{int(b):02d}" for b in latest['back_balls']])
-                logger.info(f"号码: 前区 {front_str} | 后区 {back_str}")
-            
-            # 预测下一期
-            logger.info("\n开始预测下一期号码...")
-            from lotteries.dlt.predictor import DLTPredictor
-            
-            # 获取历史数据用于预测
-            history_data = db.get_latest_lotteries(limit=200)
-            predictor = DLTPredictor(history_data)
-            predictions = predictor.predict(count=5)
-            
-            db.close()
-            
-            logger.info(f"预测结果（共 {len(predictions)} 组）:")
-            for i, pred in enumerate(predictions, 1):
-                front_str = ','.join([f"{int(b):02d}" for b in pred['front_balls']])
-                back_str = ','.join([f"{int(b):02d}" for b in pred['back_balls']])
-                logger.info(f"  组合 {i}: 前区 {front_str} | 后区 {back_str}")
-            
-            db.close()
-            
-            return {
-                'lottery_type': lottery_type,
-                'lottery_name': LOTTERY_NAMES.get(lottery_type),
-                'inserted': inserted,
-                'latest': latest,
-                'predictions': predictions
-            }
-            
-        else:
-            logger.error(f"暂不支持彩票类型: {lottery_type}")
-            return None
-            
-    except Exception as e:
-        logger.error(f"{LOTTERY_NAMES.get(lottery_type, lottery_type)} 处理失败: {e}", exc_info=True)
-        return None
+    # 直接调用 fetch.py 中的核心方法，with_predict=True
+    from cli.fetch import fetch_incremental_data
+    return fetch_incremental_data(lottery_type, with_predict=True)
 
 
 def fetch_latest_data():

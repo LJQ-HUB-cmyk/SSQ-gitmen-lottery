@@ -25,46 +25,47 @@ export class DLTSpider {
   }
 
   /**
-   * 获取最新一期数据（直接使用 500.com）
-   * 注意：500.com 返回的数据已按期号从新到旧排序，第一条即为最新
+   * 统一的爬取接口（重构版）
+   * 
+   * @param {string} startIssue - 起始期号（5位格式，如 '07001'），可选
+   * @param {string} endIssue - 结束期号（5位格式，如 '25200'），可选
+   * @param {number} count - 获取最新 N 条（仅当 start/end 都为 null 时使用），可选
+   * @returns {Promise<Array>} 中奖数据列表
+   * 
+   * 使用场景：
+   *   1. 全量爬取: fetch('07001', '25200')
+   *   2. 增量爬取: fetch('25132', '25200')  // 获取所有新数据
+   *   3. 获取最新: fetch() 或 fetch(null, null, 1)  // 不带参数返回所有可用数据（约30条）
    */
-  async fetchLatest() {
-    console.log('从 500.com 获取大乐透最新数据...');
-    
-    const url = this.baseUrl;
-    
-    const response = await fetch(url, {
-      headers: this.headers
-    });
+  async fetch(startIssue = null, endIssue = null, count = null) {
+    // 场景1: 获取最新数据（不带参数）
+    if (!startIssue && !endIssue) {
+      console.log('从 500.com 获取大乐透最新数据...');
+      
+      const response = await fetch(this.baseUrl, {
+        headers: this.headers
+      });
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const html = await response.text();
+      const data = this.parse500Html(html, true);
+      
+      if (!data || data.length === 0) {
+        throw new Error('500.com 未返回数据');
+      }
+      
+      // 如果指定了 count，则限制返回数量；否则返回所有数据
+      const result = count ? data.slice(0, count) : data;
+      console.log(`成功获取 ${data.length} 条数据，返回 ${result.length} 条`);
+      return result;
     }
-
-    const html = await response.text();
     
-    // 解析 HTML 获取最新一期数据（只解析第一条）
-    // 500.com 默认按期号降序排列，第一条就是最新的
-    const data = this.parse500Html(html, true);
-    
-    if (!data || data.length === 0) {
-      throw new Error('500.com 未返回数据');
-    }
-    
-    // 返回最新一期（第一条）
-    return data[0];
-  }
-
-  /**
-   * 从 500.com 按期号范围获取数据
-   * @param {string} startIssue - 开始期号（5位格式，如 '07001'）
-   * @param {string} endIssue - 结束期号（5位格式，如 '07200'）
-   */
-  async fetch500comByRange(startIssue, endIssue) {
+    // 场景2: 按期号范围获取
     const url = `${this.baseUrl}?start=${startIssue}&end=${endIssue}`;
-    
-    console.log(`      📊 数据源: 500.com (大乐透)`);
-    console.log(`      🔗 查询: start=${startIssue}, end=${endIssue}`);
+    console.log(`从 500.com 获取期号范围数据: ${startIssue} - ${endIssue}`);
     
     const response = await fetch(url, {
       headers: this.headers
@@ -75,11 +76,19 @@ export class DLTSpider {
     }
 
     const html = await response.text();
-    
-    // 解析 HTML
     const data = this.parse500Html(html);
     
     return data;
+  }
+
+  // 兼容旧接口
+  async fetchLatest() {
+    const data = await this.fetch();
+    return data[0];
+  }
+
+  async fetch500comByRange(startIssue, endIssue) {
+    return this.fetch(startIssue, endIssue);
   }
 
 

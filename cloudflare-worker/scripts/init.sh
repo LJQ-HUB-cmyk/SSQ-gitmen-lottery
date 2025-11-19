@@ -23,7 +23,7 @@ fi
 
 # 配置（可在 .env 文件中覆盖）
 SLEEP_TIME=${SLEEP_TIME:-120}
-MAX_NO_NEW_DATA=3
+MAX_NO_NEW_DATA=1  # 优化：只需要1次没有数据就停止（因为使用了智能增量逻辑）
 DAILY_REQUEST_LIMIT=${DAILY_REQUEST_LIMIT:-500}
 AUTO_CONTINUE=${AUTO_CONTINUE:-false}  # 是否自动跨天继续
 
@@ -238,8 +238,10 @@ while true; do
       echo ""
       echo "⚠️  本批次没有新增数据（连续 $no_new_data_count 次）"
       
-      # 如果连续多次没有新数据，说明可能已经爬完
-      if [ "$no_new_data_count" -ge "$MAX_NO_NEW_DATA" ]; then
+      # 检查 hasMore 字段，如果为 false 则直接停止
+      hasMore=$(echo "$response" | jq -r '.hasMore // true' 2>/dev/null)
+      
+      if [ "$hasMore" = "false" ] || [ "$no_new_data_count" -ge "$MAX_NO_NEW_DATA" ]; then
         echo ""
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo "🎉 数据爬取完成！"
@@ -248,6 +250,12 @@ while true; do
         echo "📊 最终统计："
         echo "   总执行次数: $iteration 次"
         echo "   数据库总数据量: $total 条"
+        
+        if [ "$hasMore" = "false" ]; then
+          echo "   停止原因: API 返回 hasMore=false（智能判断已完成）"
+        else
+          echo "   停止原因: 连续 $no_new_data_count 次无新数据"
+        fi
         echo ""
         
         # 获取详细统计
