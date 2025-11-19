@@ -29,11 +29,71 @@ export class TelegramBot {
 
   /**
    * 发送消息到配置的目标（机器人和/或频道）
+   * 如果消息过长，自动分割成多条发送
    */
   async sendMessage(text, parseMode = 'HTML') {
     if (!this.botToken) {
       console.warn('Telegram Bot Token 未配置，跳过发送');
       return false;
+    }
+
+    // Telegram 消息长度限制为 4096 字符
+    const MAX_LENGTH = 4096;
+    const messages = [];
+
+    if (text.length <= MAX_LENGTH) {
+      messages.push(text);
+    } else {
+      // 消息过长，需要分割
+      console.log(`消息长度 ${text.length} 超过限制，分割发送`);
+      
+      // 按组合分割（查找"组合 X:"）
+      const lines = text.split('\n');
+      let currentMessage = '';
+      let header = '';
+      let footer = '';
+      
+      // 提取头部（标题）
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].includes('组合')) {
+          header = lines.slice(0, i).join('\n');
+          break;
+        }
+      }
+      
+      // 提取尾部（警告信息）
+      for (let i = lines.length - 1; i >= 0; i--) {
+        if (lines[i].includes('━━━━━━━━━━━━━━━')) {
+          footer = lines.slice(i).join('\n');
+          break;
+        }
+      }
+      
+      // 分割组合
+      currentMessage = header + '\n';
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        
+        // 如果是新组合且当前消息已经较长，开始新消息
+        if (line.includes('组合') && currentMessage.length > 1000) {
+          currentMessage += footer;
+          messages.push(currentMessage.trim());
+          currentMessage = header + '\n';
+        }
+        
+        // 跳过已经在 header 或 footer 中的行
+        if (!header.includes(line) && !footer.includes(line)) {
+          currentMessage += line + '\n';
+        }
+      }
+      
+      // 添加最后一条消息
+      if (currentMessage.trim() && !currentMessage.includes('━━━━━━━━━━━━━━━')) {
+        currentMessage += footer;
+      }
+      if (currentMessage.trim()) {
+        messages.push(currentMessage.trim());
+      }
     }
 
     let successCount = 0;
@@ -42,17 +102,27 @@ export class TelegramBot {
     // 发送给机器人
     if (this.sendToBot && this.chatId) {
       totalTargets++;
-      if (await this._sendToTarget(this.chatId, text, parseMode, '机器人')) {
-        successCount++;
+      let allSuccess = true;
+      for (const msg of messages) {
+        if (!await this._sendToTarget(this.chatId, msg, parseMode, '机器人')) {
+          allSuccess = false;
+          break;
+        }
       }
+      if (allSuccess) successCount++;
     }
 
     // 发送给频道
     if (this.sendToChannel && this.channelId) {
       totalTargets++;
-      if (await this._sendToTarget(this.channelId, text, parseMode, '频道')) {
-        successCount++;
+      let allSuccess = true;
+      for (const msg of messages) {
+        if (!await this._sendToTarget(this.channelId, msg, parseMode, '频道')) {
+          allSuccess = false;
+          break;
+        }
       }
+      if (allSuccess) successCount++;
     }
 
     if (totalTargets === 0) {
@@ -60,7 +130,7 @@ export class TelegramBot {
       return false;
     }
 
-    console.log(`Telegram 消息发送完成: ${successCount}/${totalTargets} 成功`);
+    console.log(`Telegram 消息发送完成: ${successCount}/${totalTargets} 成功 (${messages.length} 条消息)`);
     return successCount > 0;
   }
 

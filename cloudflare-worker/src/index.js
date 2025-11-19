@@ -244,6 +244,7 @@ async function smartFetch(type, env, options = {}) {
 async function processSingleLottery(type, env, config) {
   const startTime = Date.now();
   const maxProcessTime = 3000; // 单个彩票类型最大处理时间 3 秒
+  const modules = getLotteryModules(type);
   
   try {
     // 调用统一的智能爬取方法
@@ -252,9 +253,11 @@ async function processSingleLottery(type, env, config) {
     if (!fetchResult.success) {
       return {
         type: type,
-        name: fetchResult.name,
+        name: modules.name,
         success: false,
-        message: fetchResult.error
+        message: fetchResult.error,
+        hasNewData: false,
+        predictions: []
       };
     }
     
@@ -265,10 +268,11 @@ async function processSingleLottery(type, env, config) {
     if (!latest) {
       return {
         type: type,
-        name: fetchResult.name,
+        name: modules.name,
         success: true,
         message: '暂无数据',
-        hasNewData: false
+        hasNewData: false,
+        predictions: []
       };
     }
     
@@ -277,10 +281,10 @@ async function processSingleLottery(type, env, config) {
     
     // 检查是否超时
     if (Date.now() - startTime > maxProcessTime) {
-      console.warn(`${fetchResult.name} 处理超时，跳过预测`);
+      console.warn(`${modules.name} 处理超时，跳过预测`);
       return {
         type: type,
-        name: fetchResult.name,
+        name: modules.name,
         success: true,
         message: hasNewData ? '增量更新完成（跳过预测）' : '数据已是最新（跳过预测）',
         hasNewData: hasNewData,
@@ -290,18 +294,18 @@ async function processSingleLottery(type, env, config) {
       };
     }
     
-    // 预测下一期（无论是否有新数据）
-    console.log('开始预测下一期...');
+    // 预测下一期（无论是否有新数据都进行预测）
+    console.log(`开始预测 ${modules.name} 下一期...`);
     const defaultStrategies = config.defaultStrategies.split(',').map(s => s.trim());
     const predictor = new modules.predictor(db, { strategies: defaultStrategies });
     const predictions = await predictor.predict(config.defaultPredictionCount);
-    console.log(`✓ 预测完成: ${predictions.length} 组`);
+    console.log(`✓ ${modules.name} 预测完成: ${predictions.length} 组`);
     
     return {
       type: type,
       name: modules.name,
       success: true,
-      message: hasNewData ? '增量更新完成' : '数据已是最新',
+      message: hasNewData ? '增量更新并预测完成' : '数据已是最新，预测完成',
       hasNewData: hasNewData,
       new_count: inserted,
       latest: latest,
@@ -314,7 +318,9 @@ async function processSingleLottery(type, env, config) {
       type: type,
       name: modules.name,
       success: false,
-      message: error.message
+      message: error.message,
+      hasNewData: false,
+      predictions: []
     };
   }
 }
@@ -353,73 +359,48 @@ async function runDailyTask(env) {
     const hasNewData = results.some(r => r.hasNewData);
     const hasPredictions = results.some(r => r.predictions && r.predictions.length > 0);
     
-    // 发送 Telegram 通知（如果有新数据或有预测结果）
-    if (hasNewData || hasPredictions) {
-      // 为每个彩票类型单独发送消息，避免消息过长被截断
-      for (const result of results) {
-        // 跳过没有预测结果的彩票类型
-        if (!result.predictions || result.predictions.length === 0) continue;
-        
-        // 构建单个彩票类型的消息（清晰明了的格式）
-        let message = `🔮 <b>${result.name}预测</b>\n\n`;
-        
-        // 显示数据状态
-        if (result.hasNewData) {
-          message += `🆕 发现 ${result.new_count} 条新数据\n`;
-        } else {
-          message += `✅ 暂无新数据\n`;
-        }
-        
-        const latest = result.latest;
-        if (latest) {
-          message += `📅 最新开奖: ${latest.lottery_no} (${latest.draw_date})\n`;
-        }
-        
-        if (result.type === 'ssq') {
-          const redStr = latest.red_balls.map(b => String(b).padStart(2, '0')).join(' ');
-          message += `🔴 红球: <code>${redStr}</code>\n`;
-          message += `� 蓝球: <codte>${String(latest.blue_ball).padStart(2, '0')}</code>\n\n`;
-        } else {
-          const frontStr = latest.front_balls.map(b => String(b).padStart(2, '0')).join(' ');
-          const backStr = latest.back_balls.map(b => String(b).padStart(2, '0')).join(' ');
-          message += `🔴 前区: <code>${frontStr}</code>\n`;
-          message += `🔵 后区: <code>${backStr}</code>\n\n`;
-        }
-        
-        // 预测结果（使用与 Python 版本一致的格式）
-        if (result.predictions && Array.isArray(result.predictions) && result.predictions.length > 0) {
-          // 显示所有预测组合
-          for (let i = 0; i < result.predictions.length; i++) {
-            const pred = result.predictions[i];
-            const strategyName = pred.strategy_name || pred.strategy || '未知策略';
-            
-            message += `<b>组合 ${i + 1}: [${strategyName}]</b>\n`;
-            
-            if (result.type === 'ssq') {
-              const redStr = pred.red_balls.map(b => String(b).padStart(2, '0')).join(' ');
-              message += `🔴 红球: <code>${redStr}</code>\n`;
-              message += `🔵 蓝球: <code>${String(pred.blue_ball).padStart(2, '0')}</code>\n\n`;
-            } else {
-              const frontStr = pred.front_balls.map(b => String(b).padStart(2, '0')).join(' ');
-              const backStr = pred.back_balls.map(b => String(b).padStart(2, '0')).join(' ');
-              message += `🔴 前区: <code>${frontStr}</code>\n`;
-              message += `🔵 后区: <code>${backStr}</code>\n\n`;
-            }
-          }
-        } else {
-          message += `❌ 无法生成预测\n\n`;
-        }
-        
-        message += `━━━━━━━━━━━━━━━\n`;
-        message += `⚠️ 仅供参考，理性购彩`;
-        
-        // 发送单个彩票类型的消息
-        console.log(`\n发送 ${result.name} Telegram 通知...`);
-        await telegram.sendMessage(message);
-        console.log(`✓ ${result.name} Telegram 通知已发送`);
+    // 总是发送 Telegram 通知（无论是否有新数据，只要有预测结果）
+    // 为每个彩票类型单独发送消息，避免消息过长被截断
+    for (const result of results) {
+      // 只发送成功且有预测结果的彩票类型
+      if (!result.predictions || result.predictions.length === 0) {
+        console.log(`${result.name} 无预测结果，跳过通知`);
+        continue;
       }
-    } else {
-      console.log('\n无新数据且无预测结果，跳过 Telegram 通知');
+      
+      // 构建单个彩票类型的消息（简洁格式）
+      let message = `🔮 ${result.name}预测\n`;
+      
+      // 预测结果
+      if (result.predictions && Array.isArray(result.predictions) && result.predictions.length > 0) {
+        for (let i = 0; i < result.predictions.length; i++) {
+          const pred = result.predictions[i];
+          const strategyName = pred.strategy_name || pred.strategy || '未知策略';
+          
+          message += `组合 ${i + 1}: [${strategyName}]\n`;
+          
+          if (result.type === 'ssq') {
+            const redStr = pred.red_balls.map(b => String(b).padStart(2, '0')).join(' ');
+            message += `🔴 红球: ${redStr}\n`;
+            message += `🔵 蓝球: ${String(pred.blue_ball).padStart(2, '0')}\n`;
+          } else {
+            const frontStr = pred.front_balls.map(b => String(b).padStart(2, '0')).join(' ');
+            const backStr = pred.back_balls.map(b => String(b).padStart(2, '0')).join(' ');
+            message += `🔴 前区: ${frontStr}\n`;
+            message += `🔵 后区: ${backStr}\n`;
+          }
+        }
+      } else {
+        message += `❌ 无法生成预测\n`;
+      }
+      
+      message += `━━━━━━━━━━━━━━━\n`;
+      message += `⚠️ 仅供参考，理性购彩`;
+      
+      // 发送单个彩票类型的消息
+      console.log(`\n发送 ${result.name} Telegram 通知...`);
+      await telegram.sendMessage(message);
+      console.log(`✓ ${result.name} Telegram 通知已发送`);
     }
     
     console.log('✅ 每日任务执行完成');
@@ -911,13 +892,46 @@ export default {
   },
 
   /**
-   * Cron 触发器处理器
+   * Cron 触发器处理器（优化版本）
    * 由 Cloudflare 定时任务自动调用
    */
   async scheduled(event, env, ctx) {
-    console.log('Cron 触发器执行:', event.cron);
+    const startTime = Date.now();
+    console.log('⏰ Cron 触发器执行:', event.cron, new Date().toISOString());
     
-    // 使用 waitUntil 确保任务完成
-    ctx.waitUntil(runDailyTask(env));
+    // 使用 waitUntil 确保任务完成（即使响应已返回）
+    ctx.waitUntil(
+      (async () => {
+        try {
+          const result = await runDailyTask(env);
+          const executionTime = Date.now() - startTime;
+          
+          console.log(`✅ 定时任务执行${result.success ? '成功' : '失败'}, 耗时: ${executionTime}ms`);
+          
+          // 如果执行时间过长，记录警告
+          if (executionTime > 10000) {
+            console.warn(`⚠️ 定时任务执行时间过长: ${executionTime}ms`);
+          }
+          
+        } catch (error) {
+          console.error('❌ 定时任务执行异常:', error);
+          
+          // 尝试发送错误通知
+          try {
+            const config = await getConfig(env);
+            const telegram = new TelegramBot(
+              config.telegramBotToken,
+              config.telegramChatId,
+              config.telegramChannelId,
+              config.telegramSendToBot,
+              config.telegramSendToChannel
+            );
+            await telegram.sendError(error);
+          } catch (notifyError) {
+            console.error('发送错误通知失败:', notifyError);
+          }
+        }
+      })()
+    );
   }
 };
