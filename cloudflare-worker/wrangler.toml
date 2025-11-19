@@ -13,6 +13,12 @@ TELEGRAM_CHANNEL_ID = "@renren500w"
 TELEGRAM_SEND_TO_BOT = "false"
 TELEGRAM_SEND_TO_CHANNEL = "true"
 
+# 爬取配置（优化后）
+SLEEP_TIME=30               # 每次爬取间隔（秒）- 优化：减少等待时间
+DAILY_REQUEST_LIMIT=1000    # 每日请求限制 - 优化：小批量处理，可以增加次数
+AUTO_CONTINUE=false         # 是否自动跨天继续（true=自动，false=手动）
+
+
 # D1 数据库绑定
 [[d1_databases]]
 binding = "DB"
