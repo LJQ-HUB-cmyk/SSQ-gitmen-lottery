@@ -115,12 +115,27 @@ processSingleLottery('ssq', env, config)
 
 ## 📊 预测策略
 
-| 策略 | 说明 |
-|------|------|
-| frequency | 基于历史高频号码 |
-| random | 完全随机选择 |
-| balanced | 大小号均衡分布 |
-| coldHot | 结合冷热号 |
+| 策略 | 说明 | 特点 |
+|------|------|------|
+| frequency | 基于历史高频号码 | 统计分析，选择出现频率高的号码 |
+| balanced | 大小号均衡分布 | 保持大号小号的平衡，避免极端分布 |
+| coldHot | 冷热号结合 | 结合冷号（长期未出现）和热号（近期频繁） |
+| random | 完全随机选择 | 纯随机生成，增加预测的多样性 |
+
+### 策略配置
+
+在 `.env` 文件中配置使用的策略：
+
+```bash
+# 预测策略配置
+DEFAULT_STRATEGIES=frequency,balanced,coldHot,random  # 使用的策略（逗号分隔）
+DEFAULT_PREDICTION_COUNT=5                            # 每种策略生成的组合数
+```
+
+**预测结果**：
+- 如果配置 4 种策略，每种生成 5 组，总共 20 组预测
+- 每种策略会在日志中显示使用情况和生成结果
+- 可根据需要调整策略组合，如只使用 `frequency,random`
 
 ## �️ 技术栈
 
@@ -164,6 +179,10 @@ DB_USER=root
 DB_PASSWORD=your_password
 DB_NAME=lottery_db
 
+# 预测策略配置
+DEFAULT_STRATEGIES=frequency,balanced,coldHot,random  # 使用的策略
+DEFAULT_PREDICTION_COUNT=5                            # 每种策略生成组合数
+
 # Telegram（可选）
 TELEGRAM_BOT_TOKEN=your_token
 TELEGRAM_CHAT_ID=your_chat_id
@@ -175,6 +194,19 @@ TELEGRAM_PROXY_PORT=7890
 
 ## 🔄 最新更新（2025-11-19）
 
+### 🎯 预测策略配置修复
+- **修复问题**：预测器只使用 `frequency` 策略，忽略 `.env` 配置
+- **根本原因**：所有预测器调用都没有传入 `strategies` 参数
+- **修复文件**：`cli/fetch.py`、`cli/predict.py`、`cli/schedule.py`
+- **修复效果**：现在完全按照 `.env` 中的 `DEFAULT_STRATEGIES` 配置工作
+
+### 📊 多策略预测增强
+- **配置示例**：`DEFAULT_STRATEGIES=frequency,balanced,coldHot,random`
+- **预测结果**：每种策略生成指定数量组合（如 4策略×5组=20组）
+- **日志显示**：清晰显示每种策略的使用和生成结果
+- **灵活配置**：可通过 `.env` 自由调整策略组合
+
+### 🔧 系统架构优化
 1. **统一爬虫接口**
    - Python 和 Worker 使用相同的 `fetch()` 方法
    - 支持全量、增量、获取最新三种场景
@@ -210,5 +242,5 @@ MIT License
 
 ---
 
-**版本**：3.0.0  
-**更新日期**：2025-11-18
+**版本**：3.1.0  
+**更新日期**：2025-11-19

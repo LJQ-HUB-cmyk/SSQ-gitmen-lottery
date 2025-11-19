@@ -72,9 +72,15 @@ def fetch_latest_data():
                 message += f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
                 message += f"<b>{result['lottery_name']}</b>\n\n"
                 
+                # 显示数据状态
                 if result['inserted'] > 0:
-                    latest = result['latest']
-                    
+                    message += f"🆕 发现 {result['inserted']} 条新数据\n"
+                else:
+                    message += "✅ 暂无新数据\n"
+                
+                # 显示最新开奖（如果有数据）
+                latest = result.get('latest')
+                if latest:
                     if result['lottery_type'] == 'ssq':
                         message += f"📅 最新开奖: {latest['lottery_no']} ({latest['draw_date']})\n"
                         message += f"🔴 号码: {latest['red_balls']} + {latest['blue_ball']}\n\n"
@@ -83,10 +89,12 @@ def fetch_latest_data():
                         back_str = ','.join([f"{int(b):02d}" for b in latest['back_balls']])
                         message += f"📅 最新开奖: {latest['lottery_no']} ({latest['draw_date']})\n"
                         message += f"🔴 号码: 前区 {front_str} | 后区 {back_str}\n\n"
-                    
-                    # 预测结果
-                    message += f"🔮 <b>预测下一期（{len(result['predictions'])} 组）</b>\n"
-                    for i, pred in enumerate(result['predictions'][:3], 1):  # 只显示前3组
+                
+                # 显示预测结果（如果有）
+                predictions = result.get('predictions', [])
+                if predictions:
+                    message += f"🔮 <b>预测下一期（{len(predictions)} 组）</b>\n"
+                    for i, pred in enumerate(predictions[:3], 1):  # 只显示前3组
                         if result['lottery_type'] == 'ssq':
                             message += f"  {i}. {pred['red_balls']} + {pred['blue_ball']}\n"
                         else:  # dlt
@@ -94,10 +102,10 @@ def fetch_latest_data():
                             back_str = ','.join([f"{int(b):02d}" for b in pred['back_balls']])
                             message += f"  {i}. {front_str} | {back_str}\n"
                     
-                    if len(result['predictions']) > 3:
-                        message += f"  ... 还有 {len(result['predictions']) - 3} 组\n"
+                    if len(predictions) > 3:
+                        message += f"  ... 还有 {len(predictions) - 3} 组\n"
                 else:
-                    message += "✅ 暂无新数据\n"
+                    message += "❌ 无法生成预测\n"
                 
                 message += "\n"
             

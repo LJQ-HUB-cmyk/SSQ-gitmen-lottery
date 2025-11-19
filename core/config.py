@@ -5,6 +5,14 @@
 import os
 from pathlib import Path
 
+# 加载环境变量
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # 如果没有安装 python-dotenv，忽略
+    pass
+
 # 项目根目录
 PROJECT_ROOT = Path(__file__).parent.parent
 
@@ -76,3 +84,13 @@ LOTTERY_NAMES = {
     'ks3': '快开3',
     'sdlt': '超级大乐透',
 }
+
+# 预测配置
+DEFAULT_STRATEGIES = os.getenv('DEFAULT_STRATEGIES', 'frequency,balanced,coldHot').split(',')
+DEFAULT_PREDICTION_COUNT = int(os.getenv('DEFAULT_PREDICTION_COUNT', 5))
+
+# Telegram 配置
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
+TELEGRAM_PROXY_HOST = os.getenv('TELEGRAM_PROXY_HOST')
+TELEGRAM_PROXY_PORT = int(os.getenv('TELEGRAM_PROXY_PORT', 0)) if os.getenv('TELEGRAM_PROXY_PORT') else None

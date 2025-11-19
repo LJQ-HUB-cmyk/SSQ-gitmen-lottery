@@ -291,19 +291,30 @@ def fetch_incremental_data(lottery_type: str, with_predict: bool = False):
             }
             
             # 如果需要预测
-            if with_predict and latest:
-                logger.info("\n开始预测下一期号码...")
-                from lotteries.ssq.predictor import SSQPredictor
+            if with_predict:
+                # 获取最新数据用于预测（如果没有latest，重新获取）
+                prediction_latest = latest or db.get_latest_lottery()
                 
-                history_data = db.get_all_lottery_data()
-                predictor = SSQPredictor(history_data)
-                predictions = predictor.predict(count=5)
-                
-                logger.info(f"预测结果（共 {len(predictions)} 组）:")
-                for i, pred in enumerate(predictions, 1):
-                    logger.info(f"  组合 {i}: {pred['red_balls']} + {pred['blue_ball']}")
-                
-                result['predictions'] = predictions
+                if prediction_latest:
+                    logger.info("\n开始预测下一期号码...")
+                    from lotteries.ssq.predictor import SSQPredictor
+                    from core.config import DEFAULT_STRATEGIES, DEFAULT_PREDICTION_COUNT
+                    
+                    history_data = db.get_all_lottery_data()
+                    predictor = SSQPredictor(history_data, strategies=DEFAULT_STRATEGIES)
+                    predictions = predictor.predict(count=DEFAULT_PREDICTION_COUNT)
+                    
+                    logger.info(f"预测结果（共 {len(predictions)} 组）:")
+                    for i, pred in enumerate(predictions, 1):
+                        logger.info(f"  组合 {i}: {pred['red_balls']} + {pred['blue_ball']}")
+                    
+                    result['predictions'] = predictions
+                    # 如果没有latest，使用prediction_latest
+                    if not latest:
+                        result['latest'] = prediction_latest
+                else:
+                    logger.warning("数据库中没有历史数据，无法进行预测")
+                    result['predictions'] = []
             
             db.close()
             return result
@@ -378,21 +389,32 @@ def fetch_incremental_data(lottery_type: str, with_predict: bool = False):
             }
             
             # 如果需要预测
-            if with_predict and latest:
-                logger.info("\n开始预测下一期号码...")
-                from lotteries.dlt.predictor import DLTPredictor
+            if with_predict:
+                # 获取最新数据用于预测（如果没有latest，重新获取）
+                prediction_latest = latest or db.get_latest_lottery()
                 
-                history_data = db.get_all_lottery_data()
-                predictor = DLTPredictor(history_data)
-                predictions = predictor.predict(count=5)
-                
-                logger.info(f"预测结果（共 {len(predictions)} 组）:")
-                for i, pred in enumerate(predictions, 1):
-                    front_str = ','.join([f"{int(b):02d}" for b in pred['front_balls']])
-                    back_str = ','.join([f"{int(b):02d}" for b in pred['back_balls']])
-                    logger.info(f"  组合 {i}: 前区 {front_str} | 后区 {back_str}")
-                
-                result['predictions'] = predictions
+                if prediction_latest:
+                    logger.info("\n开始预测下一期号码...")
+                    from lotteries.dlt.predictor import DLTPredictor
+                    from core.config import DEFAULT_STRATEGIES, DEFAULT_PREDICTION_COUNT
+                    
+                    history_data = db.get_all_lottery_data()
+                    predictor = DLTPredictor(history_data, strategies=DEFAULT_STRATEGIES)
+                    predictions = predictor.predict(count=DEFAULT_PREDICTION_COUNT)
+                    
+                    logger.info(f"预测结果（共 {len(predictions)} 组）:")
+                    for i, pred in enumerate(predictions, 1):
+                        front_str = ','.join([f"{int(b):02d}" for b in pred['front_balls']])
+                        back_str = ','.join([f"{int(b):02d}" for b in pred['back_balls']])
+                        logger.info(f"  组合 {i}: 前区 {front_str} | 后区 {back_str}")
+                    
+                    result['predictions'] = predictions
+                    # 如果没有latest，使用prediction_latest
+                    if not latest:
+                        result['latest'] = prediction_latest
+                else:
+                    logger.warning("数据库中没有历史数据，无法进行预测")
+                    result['predictions'] = []
             
             db.close()
             return result

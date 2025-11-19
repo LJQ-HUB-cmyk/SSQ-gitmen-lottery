@@ -144,6 +144,8 @@ BaseSpider      # 爬虫框架
   └── 连接池
 
 BasePredictor   # 预测框架
+  ├── 多策略支持（frequency、balanced、coldHot、random）
+  ├── 配置驱动（通过 .env 灵活配置）
   ├── 频率分析
   ├── 去重规则
   └── 连号限制
@@ -249,6 +251,7 @@ TelegramBot     # 通知系统
 - .env 不提交
 - SSL/TLS 支持
 - 敏感信息保护
+- 预测策略配置化（支持动态调整）
 
 ### 容器安全
 
@@ -340,6 +343,37 @@ README.md (主入口)
 
 ---
 
-**版本**: 3.0.0  
-**更新日期**: 2025-11-18  
+**版本**: 3.1.0  
+**更新日期**: 2025-11-19  
 **状态**: 🟢 生产就绪
+
+## 🔄 最新架构改进（2025-11-19）
+
+### 预测策略配置化
+
+**问题**：预测器只使用单一策略，忽略配置文件
+
+**解决方案**：
+1. 统一配置读取（`core/config.py`）
+2. 所有预测器调用传入策略参数
+3. 支持多策略组合预测
+
+**架构改进**：
+```
+配置层 (.env)
+    ↓
+core/config.py (统一配置读取)
+    ↓
+预测器调用 (cli/fetch.py, cli/predict.py, cli/schedule.py)
+    ↓
+BasePredictor (多策略执行)
+    ↓
+预测结果 (策略×数量 = 总组合数)
+```
+
+**配置示例**：
+```bash
+DEFAULT_STRATEGIES=frequency,balanced,coldHot,random
+DEFAULT_PREDICTION_COUNT=5
+# 结果：4策略 × 5组 = 20个预测组合
+```
