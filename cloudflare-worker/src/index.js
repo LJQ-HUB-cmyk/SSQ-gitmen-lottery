@@ -468,31 +468,39 @@ export default {
         const BATCH_SIZE = 50; // 每次最多爬取50期，避免超时
         
         if (latestInDb) {
-          // 从数据库最新期号的下一期开始爬取
-          const latestNo = latestInDb.lottery_no;
+          // 按照预演逻辑：基于数据库最新期号计算下一批次范围
+          const latestNo = latestInDb.lottery_no; // 格式：2003089（7位）
           console.log(`数据库最新期号: ${latestNo}`);
           
-          // 解析期号：2025133 -> 25, 133
-          const yearPart = latestNo.substring(2, 4);
-          const issuePart = parseInt(latestNo.substring(4));
+          // 解析期号：2003089 -> 年份2003, 期号089
+          const dbYear = parseInt(latestNo.substring(0, 4)); // 2003
+          const dbIssue = parseInt(latestNo.substring(4)); // 89
+          const yearShort = latestNo.substring(2, 4); // 03
           
-          // 下一期
-          const nextIssue = issuePart + 1;
-          startIssue = `${yearPart}${nextIssue.toString().padStart(3, '0')}`;
+          // 计算下一批次起始期号（最新期号+1）
+          const nextIssue = dbIssue + 1; // 89 + 1 = 90
           
-          // 如果跨年了，从新年第一期开始
+          // 检查是否需要跨年
           if (nextIssue > 200) {
-            const nextYear = parseInt(yearPart) + 1;
-            startIssue = `${nextYear.toString().padStart(2, '0')}001`;
-            console.log(`跨年处理: ${yearPart}${nextIssue} -> ${startIssue} (${2000 + nextYear}年)`);
+            // 跨年：进入下一年第一期
+            const nextYear = dbYear + 1; // 2003 + 1 = 2004
+            const nextYearShort = nextYear.toString().substring(2); // 04
+            startIssue = `${nextYearShort}001`; // 04001
+            endIssue = `${nextYearShort}${Math.min(1 + BATCH_SIZE - 1, 200).toString().padStart(3, '0')}`; // 04050
+            console.log(`跨年处理: ${latestNo}(${dbYear}) -> ${startIssue}-${endIssue}(${nextYear}年)`);
+          } else {
+            // 同年：继续当年期号
+            startIssue = `${yearShort}${nextIssue.toString().padStart(3, '0')}`; // 03090
+            
+            // 计算结束期号：start + 批次大小 - 1，但不超过200
+            let endIssueNum = nextIssue + BATCH_SIZE - 1; // 90 + 50 - 1 = 139
+            if (endIssueNum > 200) {
+              endIssueNum = 200;
+            }
+            
+            endIssue = `${yearShort}${endIssueNum.toString().padStart(3, '0')}`; // 03139
+            console.log(`同年继续: ${latestNo} -> ${startIssue}-${endIssue}`);
           }
-          
-          // 计算结束期号（小批量，不跨年）
-          const startYear = parseInt(startIssue.substring(0, 2));
-          const startIssueNum = parseInt(startIssue.substring(2));
-          const endIssueNum = Math.min(startIssueNum + BATCH_SIZE - 1, 200);
-          endIssue = `${startYear.toString().padStart(2, '0')}${endIssueNum.toString().padStart(3, '0')}`;
-          console.log(`批次范围计算: 起始=${startIssue}, 结束=${endIssue}, 批次大小=${endIssueNum - startIssueNum + 1}`);
         } else {
           // 数据库为空，从起始年份开始（小批量模式）
           const startYear = modules.startYear;
@@ -512,42 +520,73 @@ export default {
         const data = await spider.fetch(startIssue, endIssue);
         
         if (!data || data.length === 0) {
-          // 网站API返回空数据，需要判断是否应该跨年
+          // 无数据时直接跨年重新爬取（不插入虚拟记录）
           const currentTotal = await db.getCount(type);
           
-          // 最简单的跨年策略：无数据就跨年
-          // 理由：期数不固定（1期到100+期都可能），复杂判断容易出错
-          // 让脚本层面的连续无数据计数器控制最终停止
-          const shouldCrossYear = true;
+          // 解析当前查询的年份并计算跨年参数
+          const currentQueryYear = parseInt(startIssue.substring(0, 2)) + 2000; // 03 -> 2003
+          const nextYear = currentQueryYear + 1; // 2004
+          const nextYearShort = nextYear.toString().substring(2); // 04
           
-          console.log(`\n========================================`);
-          console.log(`⚠️  ${modules.name} 本批次无数据`);
-          console.log(`   查询范围: ${startIssue} - ${endIssue}`);
-          console.log(`   当前总计: ${currentTotal} 条`);
-          console.log(`   跨年策略: 无数据就跨年`);
-          console.log(`========================================\n`);
+          // 计算跨年后的新查询范围
+          const crossYearStart = `${nextYearShort}001`; // 04001
+          const crossYearEnd = `${nextYearShort}${Math.min(BATCH_SIZE, 200).toString().padStart(3, '0')}`; // 04050
+          
+          console.log(`当前查询 ${startIssue}-${endIssue} 无数据，跨年到 ${crossYearStart}-${crossYearEnd}`);
+          
+          // 直接用跨年参数重新爬取
+          const crossYearData = await spider.fetch(crossYearStart, crossYearEnd);
+          
+          if (crossYearData && crossYearData.length > 0) {
+            // 跨年后有数据，入库
+            console.log(`跨年成功，获取 ${crossYearData.length} 条 ${nextYear} 年数据`);
+            const result = await db.batchInsert(type, crossYearData);
+            
+            return new Response(
+              JSON.stringify({
+                success: true,
+                message: `${modules.name} 跨年爬取完成`,
+                inserted: result.inserted,
+                skipped: result.skipped,
+                total: await db.getCount(type),
+                dataSource: '500.com',
+                lotteryType: type,
+                queryParams: {
+                  start: crossYearStart,
+                  end: crossYearEnd
+                },
+                hasMore: true,
+                needsCrossYear: false, // 已经跨年并获得数据
+                currentYear: nextYear,
+                crossedFromYear: currentQueryYear,
+                note: `从 ${currentQueryYear} 年跨年到 ${nextYear} 年，获得 ${result.inserted} 条新数据`
+              }),
+              {
+                headers: { 'Content-Type': 'application/json; charset=utf-8' }
+              }
+            );
+          }
+          // 跨年后仍无数据
+          console.log(`跨年到 ${nextYear} 年仍无数据`);
           
           return new Response(
             JSON.stringify({
               success: true,
-              message: shouldCrossYear ? 
-                `${modules.name} 当年数据爬取完成，建议跨年继续` : 
-                `${modules.name} 数据已完整，所有历史数据已存在`,
+              message: `${modules.name} 跨年后仍无数据`,
               inserted: 0,
               skipped: 0,
               total: currentTotal,
               dataSource: '500.com',
               lotteryType: type,
               queryParams: {
-                start: startIssue,
-                end: endIssue
+                start: crossYearStart,
+                end: crossYearEnd
               },
-              hasMore: shouldCrossYear, // 如果需要跨年，继续爬取
-              needsCrossYear: shouldCrossYear,
-              currentYear: parseInt(startIssue.substring(0, 2)) + 2000,
-              note: shouldCrossYear ? 
-                '当年数据爬取完成，建议跨年继续爬取' : 
-                '本批次无数据，初始化完成'
+              hasMore: true, // 继续尝试，让脚本层面控制停止
+              needsCrossYear: true,
+              currentYear: nextYear,
+              crossedFromYear: currentQueryYear,
+              note: `从 ${currentQueryYear} 年跨年到 ${nextYear} 年，仍无数据，继续尝试下一年`
             }),
             {
               headers: { 'Content-Type': 'application/json; charset=utf-8' }
