@@ -22,9 +22,9 @@ else
 fi
 
 # 配置（可在 .env 文件中覆盖）
-SLEEP_TIME=${SLEEP_TIME:-120}
-MAX_NO_NEW_DATA=1  # 优化：只需要1次没有数据就停止（因为使用了智能增量逻辑）
-DAILY_REQUEST_LIMIT=${DAILY_REQUEST_LIMIT:-500}
+SLEEP_TIME=${SLEEP_TIME:-30}  # 优化：减少等待时间到30秒
+MAX_NO_NEW_DATA=2  # 优化：连续2次没有数据就停止
+DAILY_REQUEST_LIMIT=${DAILY_REQUEST_LIMIT:-1000}  # 优化：增加每日限制（小批量处理）
 AUTO_CONTINUE=${AUTO_CONTINUE:-false}  # 是否自动跨天继续
 
 # 设置代理

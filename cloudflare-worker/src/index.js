@@ -460,11 +460,12 @@ export default {
         // 获取数据库最新期号
         const latestInDb = await db.getLatest(type);
         
-        // 确定爬取范围
+        // 确定爬取范围（优化：小批量处理，避免超时）
         const currentYear = new Date().getFullYear();
         const yearShort = currentYear.toString().substring(2);
         
         let startIssue, endIssue;
+        const BATCH_SIZE = 50; // 每次最多爬取50期，避免超时
         
         if (latestInDb) {
           // 从数据库最新期号的下一期开始爬取
@@ -484,16 +485,18 @@ export default {
             const nextYear = parseInt(yearPart) + 1;
             startIssue = `${nextYear.toString().padStart(2, '0')}001`;
           }
+          
+          // 计算结束期号（小批量）
+          const startYear = parseInt(startIssue.substring(0, 2));
+          const startIssueNum = parseInt(startIssue.substring(2));
+          const endIssueNum = Math.min(startIssueNum + BATCH_SIZE - 1, 200);
+          endIssue = `${startYear.toString().padStart(2, '0')}${endIssueNum.toString().padStart(3, '0')}`;
         } else {
-          // 数据库为空，从起始年份开始
-          const startYear = modules.startYear;
-          const startYearShort = startYear.toString().substring(2);
-          startIssue = `${startYearShort}001`;
-          console.log('数据库为空，从起始年份开始');
+          // 数据库为空，从当前年份开始（而不是起始年份，避免一次性爬取太多）
+          startIssue = `${yearShort}001`;
+          endIssue = `${yearShort}${Math.min(BATCH_SIZE, 200).toString().padStart(3, '0')}`;
+          console.log('数据库为空，从当前年份开始（小批量模式）');
         }
-        
-        // 结束期号：当年最后一期
-        endIssue = `${yearShort}200`;
         
         console.log(`爬取期号范围: ${startIssue} - ${endIssue}`);
         
@@ -539,8 +542,15 @@ export default {
         const currentTotal = await db.getCount(type);
         
         // 智能判断是否还有更多数据
-        // 如果本次爬取的数据量很少（< 10条），可能接近完成
-        const hasMore = data.length >= 10;
+        // 1. 如果本次爬取的数据量达到批次大小，可能还有更多
+        // 2. 如果结束期号还没到当前年份的最后一期，可能还有更多
+        const endYear = parseInt(endIssue.substring(0, 2));
+        const endIssueNum = parseInt(endIssue.substring(2));
+        const currentYearShort = parseInt(yearShort);
+        
+        const hasMore = (data.length >= BATCH_SIZE * 0.8) || // 爬取量接近批次大小
+                       (endYear < currentYearShort) || // 还没到当前年份
+                       (endYear === currentYearShort && endIssueNum < 200); // 当前年份但还没到最后一期
         
         console.log(`\n========================================`);
         console.log(`✅ ${modules.name} 本次爬取完成`);
