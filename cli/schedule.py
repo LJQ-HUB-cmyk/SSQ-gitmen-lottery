@@ -65,55 +65,40 @@ def fetch_latest_data():
             from core.telegram_bot import TelegramBot
             telegram = TelegramBot()
             
-            # 构建综合消息
-            message = "🎰 <b>彩票预测系统 - 每日更新</b>\n\n"
-            
+            # 为每个彩票类型单独发送消息
             for result in results:
-                message += f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                message += f"<b>{result['lottery_name']}</b>\n\n"
-                
-                # 显示数据状态
-                if result['inserted'] > 0:
-                    message += f"🆕 发现 {result['inserted']} 条新数据\n"
-                else:
-                    message += "✅ 暂无新数据\n"
-                
-                # 显示最新开奖（如果有数据）
-                latest = result.get('latest')
-                if latest:
-                    if result['lottery_type'] == 'ssq':
-                        message += f"📅 最新开奖: {latest['lottery_no']} ({latest['draw_date']})\n"
-                        message += f"🔴 号码: {latest['red_balls']} + {latest['blue_ball']}\n\n"
-                    else:  # dlt
-                        front_str = ','.join([f"{int(b):02d}" for b in latest['front_balls']])
-                        back_str = ','.join([f"{int(b):02d}" for b in latest['back_balls']])
-                        message += f"📅 最新开奖: {latest['lottery_no']} ({latest['draw_date']})\n"
-                        message += f"🔴 号码: 前区 {front_str} | 后区 {back_str}\n\n"
-                
-                # 显示预测结果（如果有）
                 predictions = result.get('predictions', [])
-                if predictions:
-                    message += f"🔮 <b>预测下一期（{len(predictions)} 组）</b>\n"
-                    for i, pred in enumerate(predictions[:3], 1):  # 只显示前3组
-                        if result['lottery_type'] == 'ssq':
-                            message += f"  {i}. {pred['red_balls']} + {pred['blue_ball']}\n"
-                        else:  # dlt
-                            front_str = ','.join([f"{int(b):02d}" for b in pred['front_balls']])
-                            back_str = ','.join([f"{int(b):02d}" for b in pred['back_balls']])
-                            message += f"  {i}. {front_str} | {back_str}\n"
-                    
-                    if len(predictions) > 3:
-                        message += f"  ... 还有 {len(predictions) - 3} 组\n"
-                else:
-                    message += "❌ 无法生成预测\n"
                 
-                message += "\n"
-            
-            message += "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            message += f"⏰ 更新时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-            
-            telegram.send_message(message)
-            logger.info("✓ Telegram 通知已发送")
+                # 只发送有预测结果的彩票类型
+                if not predictions:
+                    logger.info(f"跳过 {result['lottery_name']}：无预测结果")
+                    continue
+                
+                # 构建单个彩票类型的消息
+                message = f"🔮 <b>{result['lottery_name']}预测</b>\n\n"
+                
+                # 显示所有预测组合
+                for i, pred in enumerate(predictions, 1):
+                    strategy_name = pred.get('strategy_name', pred.get('strategy', '未知策略'))
+                    
+                    message += f"<b>组合 {i}: [{strategy_name}]</b>\n"
+                    
+                    if result['lottery_type'] == 'ssq':
+                        red_str = ' '.join([f"{int(b):02d}" for b in pred['red_balls']])
+                        message += f"🔴 红球: <code>{red_str}</code>\n"
+                        message += f"🔵 蓝球: <code>{int(pred['blue_ball']):02d}</code>\n\n"
+                    else:  # dlt
+                        front_str = ' '.join([f"{int(b):02d}" for b in pred['front_balls']])
+                        back_str = ' '.join([f"{int(b):02d}" for b in pred['back_balls']])
+                        message += f"🔴 前区: <code>{front_str}</code>\n"
+                        message += f"🔵 后区: <code>{back_str}</code>\n\n"
+                
+                message += "━━━━━━━━━━━━━━━\n"
+                message += "⚠️ 仅供参考，理性购彩"
+                
+                # 发送单个彩票类型的消息
+                telegram.send_message(message)
+                logger.info(f"✓ {result['lottery_name']} Telegram 通知已发送")
             
         except Exception as e:
             logger.error(f"发送 Telegram 通知失败: {e}", exc_info=True)

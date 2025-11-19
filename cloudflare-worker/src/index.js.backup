@@ -286,30 +286,28 @@ async function runDailyTask(env) {
         
         // 预测结果（使用与 Python 版本一致的格式）
         if (result.predictions && Array.isArray(result.predictions) && result.predictions.length > 0) {
-          // 显示所有预测组合
+          message += `\n🔮 <b>预测下一期（${result.predictions.length} 组）</b>\n`;
+          
+          // 显示所有预测组合（不限制数量，因为单独发送）
           for (let i = 0; i < result.predictions.length; i++) {
             const pred = result.predictions[i];
             const strategyName = pred.strategy_name || pred.strategy || '未知策略';
             
-            message += `<b>组合 ${i + 1}: [${strategyName}]</b>\n`;
-            
             if (result.type === 'ssq') {
               const redStr = pred.red_balls.map(b => String(b).padStart(2, '0')).join(' ');
-              message += `🔴 红球: <code>${redStr}</code>\n`;
-              message += `🔵 蓝球: <code>${String(pred.blue_ball).padStart(2, '0')}</code>\n\n`;
+              message += `  ${i + 1}. [${strategyName}] ${redStr} + ${String(pred.blue_ball).padStart(2, '0')}\n`;
             } else {
               const frontStr = pred.front_balls.map(b => String(b).padStart(2, '0')).join(' ');
               const backStr = pred.back_balls.map(b => String(b).padStart(2, '0')).join(' ');
-              message += `🔴 前区: <code>${frontStr}</code>\n`;
-              message += `🔵 后区: <code>${backStr}</code>\n\n`;
+              message += `  ${i + 1}. [${strategyName}] ${frontStr} | ${backStr}\n`;
             }
           }
         } else {
-          message += `❌ 无法生成预测\n\n`;
+          message += `\n❌ 无法生成预测\n`;
         }
         
-        message += `━━━━━━━━━━━━━━━\n`;
-        message += `⚠️ 仅供参考，理性购彩`;
+        message += `\n━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        message += `⏰ 更新时间: ${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}`;
         
         // 发送单个彩票类型的消息
         console.log(`\n发送 ${result.name} Telegram 通知...`);
