@@ -77,14 +77,14 @@ def smart_fetch(lottery_type: str, mode: str = 'incremental', **options) -> Dict
         
         # 根据模式执行不同的爬取逻辑
         if mode == 'incremental':
-            result = _fetch_incremental(spider, db, modules, **options)
+            result = _fetch_incremental(spider, db, modules, lottery_type, **options)
         elif mode == 'full':
-            result = _fetch_full_history(spider, db, modules, **options)
+            result = _fetch_full_history(spider, db, modules, lottery_type, **options)
         elif mode == 'year':
             target_year = options.get('target_year')
             if not target_year:
                 raise ValueError("年份模式需要指定 target_year 参数")
-            result = _fetch_single_year(spider, db, modules, target_year, **options)
+            result = _fetch_single_year(spider, db, modules, lottery_type, target_year, **options)
         else:
             raise ValueError(f"不支持的模式: {mode}")
         
@@ -97,7 +97,7 @@ def smart_fetch(lottery_type: str, mode: str = 'incremental', **options) -> Dict
         
         # 如果需要预测
         if options.get('with_predict', False) and result.get('inserted', 0) >= 0:
-            result['predictions'] = _generate_predictions(db, modules, **options)
+            result['predictions'] = _generate_predictions(db, modules, lottery_type, **options)
         
         db.close()
         return result
@@ -111,7 +111,7 @@ def smart_fetch(lottery_type: str, mode: str = 'incremental', **options) -> Dict
         }
 
 
-def _fetch_incremental(spider, db, modules, **options) -> Dict:
+def _fetch_incremental(spider, db, modules, lottery_type, **options) -> Dict:
     """增量爬取逻辑"""
     # 获取数据库中最新期号
     latest_in_db = db.get_latest_lottery()
@@ -175,7 +175,7 @@ def _fetch_incremental(spider, db, modules, **options) -> Dict:
     }
 
 
-def _fetch_full_history(spider, db, modules, **options) -> Dict:
+def _fetch_full_history(spider, db, modules, lottery_type, **options) -> Dict:
     """全量爬取逻辑（逐年推进）"""
     start_year = modules['start_year']
     current_year = datetime.now().year
@@ -250,7 +250,7 @@ def _fetch_full_history(spider, db, modules, **options) -> Dict:
     }
 
 
-def _fetch_single_year(spider, db, modules, target_year: int, **options) -> Dict:
+def _fetch_single_year(spider, db, modules, lottery_type, target_year: int, **options) -> Dict:
     """爬取指定年份的数据"""
     year_short = str(target_year)[2:]
     start_issue = f"{year_short}001"
@@ -282,7 +282,7 @@ def _fetch_single_year(spider, db, modules, target_year: int, **options) -> Dict
     }
 
 
-def _generate_predictions(db, modules, **options) -> List[Dict]:
+def _generate_predictions(db, modules, lottery_type, **options) -> List[Dict]:
     """生成预测结果"""
     try:
         # 动态导入预测器
