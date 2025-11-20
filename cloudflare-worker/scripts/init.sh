@@ -58,6 +58,22 @@ if [ -z "$LOTTERY_TYPE" ]; then
   
   echo ""
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+  
+  # 初始化七星彩
+  echo "📊 开始初始化七星彩..."
+  "$0" qxc
+  
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+  
+  # 初始化七乐彩
+  echo "📊 开始初始化七乐彩..."
+  "$0" qlc
+  
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo "✅ 所有彩票类型初始化完成！"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   exit 0
@@ -77,6 +93,8 @@ if [ "$LOTTERY_TYPE" != "ssq" ] && [ "$LOTTERY_TYPE" != "dlt" ] && [ "$LOTTERY_T
   echo "   $0       # 初始化所有类型"
   echo "   $0 ssq   # 仅初始化双色球"
   echo "   $0 dlt   # 仅初始化大乐透"
+  echo "   $0 qxc   # 仅初始化七星彩"
+  echo "   $0 qlc   # 仅初始化七乐彩"
   exit 1
 fi
 
@@ -87,6 +105,12 @@ case "$LOTTERY_TYPE" in
     ;;
   dlt)
     LOTTERY_NAME="大乐透"
+    ;;
+  qxc)
+    LOTTERY_NAME="七星彩"
+    ;;
+  qlc)
+    LOTTERY_NAME="七乐彩"
     ;;
 esac
 

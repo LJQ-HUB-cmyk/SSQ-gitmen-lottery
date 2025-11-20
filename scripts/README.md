@@ -16,106 +16,132 @@
   - **经验教训总结**（5个会话）
   - 检查清单维护流程
 
-- **CHECKLIST_UPDATES.md** - 检查清单更新说明
-  - 从 SESSION_HISTORY.md 提取的检查项
-  - 新增检查类别说明
-  - 使用方式和价值
+
 
 ### 脚本
-- **quality_check.sh** - 全面质量检查脚本
-- **integration_check.sh** - 集成完整性检查脚本
+- **check.sh** - ⭐ 统一的全面检查脚本（推荐使用）
+  - 基础质量检查（静态检查）
+  - 文档完整性检查
+  - 项目清理检查
+  - 系统环境检查
+  - 运行时检查（动态检查）
+  - 多彩票类型运行时检查
+  - 集成完整性检查（可选）
 
 ## 🚀 使用方法
 
-### 1. 全面质量检查
+### 1. 快速检查（推荐）
 
 在项目根目录运行：
 
 ```bash
-bash scripts/quality_check.sh
+bash scripts/check.sh
 ```
 
+**执行时间**: 2-3 分钟
+
 **检查内容**:
+
+**静态检查**:
 - ✓ Python 语法检查
 - ✓ 配置验证（SUPPORTED_LOTTERIES, LOTTERY_NAMES）
 - ✓ 模块验证（所有彩票类型）
 - ✓ 搜索可能的遗漏
 - ✓ 文档完整性检查
-- ✓ **项目清理检查**（过程文档、临时文件）
-- ✓ **配置一致性检查**
+- ✓ 项目清理检查（过程文档、临时文件）
+- ✓ 系统环境检查（Python 版本、依赖包）
+
+**动态检查**:
+- ✓ 增量爬取命令执行（完整日志）
+- ✓ 预测命令执行（完整日志）
+- ✓ 所有彩票类型预测测试（完整日志）
+- ✓ init.sh 脚本验证
+
+### 2. 深度检查（全面测试）
+
+```bash
+bash scripts/check.sh --deep
+```
+
+**执行时间**: 10-30 分钟
+
+**额外检查内容**:
+- ✓ 所有 Python 命令的完整执行（fetch, predict）
+- ✓ 所有 Cloudflare Worker API 端点测试
+- ✓ 完整的日志输出，便于观察系统运行过程
 
 **输出示例**:
 ```
-🔍 开始质量检查...
+🔍 开始全面检查...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+第一部分：基础质量检查
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 📝 检查 Python 语法...
-⚙️  验证配置...
-✓ 支持的彩票类型: ['ssq', 'dlt', 'qxc', 'qlc']
-📦 验证模块...
-✓ ssq: 双色球
-✓ dlt: 大乐透
-✓ qxc: 七星彩
-✓ qlc: 七乐彩
-✅ 质量检查完成！
+✓ Python 语法检查通过
+...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+第五部分：运行时检查 - 命令执行
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 执行增量爬取测试 (python lottery.py fetch ssq --mode latest)...
+
+2025-11-20 14:21:47,348 - cli.fetch - INFO - 增量爬取 双色球
+2025-11-20 14:21:49,581 - core.base_database - INFO - 数据库连接成功
+...
+✓ 增量爬取执行成功
+
+✅ 所有检查通过！
 ```
 
 ### 2. 集成完整性检查
 
-检查特定彩票类型的集成：
+检查特定彩票类型的集成（可选参数）：
 
 ```bash
-bash scripts/integration_check.sh <lottery_type>
+bash scripts/check.sh <lottery_type>
 ```
 
 **示例**:
 ```bash
 # 检查七乐彩集成
-bash scripts/integration_check.sh qlc
+bash scripts/check.sh qlc
 
 # 检查双色球集成
-bash scripts/integration_check.sh ssq
+bash scripts/check.sh ssq
 ```
 
-**检查内容**:
+**额外检查内容**:
 - ✓ Python 文件集成（7个文件）
 - ✓ Worker 文件集成（3个文件）
 - ✓ 模块文件完整性（4个文件）
 - ✓ Worker 模块文件（2个文件）
-- ✓ 功能测试
 
-**输出示例**:
-```
-🔍 检查 qlc 的集成完整性...
-📝 检查 Python 文件...
-✓ core/config.py 包含 qlc
-✓ cli/smart_fetch.py 包含 qlc
-...
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-检查结果: ✓ 18 项通过, ✗ 0 项失败
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ qlc 集成完整！
-```
+
 
 ## 📋 使用场景
 
 ### 新增彩票类型时
 
 1. 实现核心功能
-2. 运行集成检查：`bash scripts/integration_check.sh <type>`
+2. 运行集成检查：`bash scripts/full_check.sh <type>`
 3. 根据失败项逐一修复
 4. 再次运行直到全部通过
-5. 运行全面质量检查：`bash scripts/quality_check.sh`
+5. 运行全面质量检查：`bash scripts/full_check.sh`
 
 ### 修改核心逻辑时
 
 1. 修改代码
-2. 运行全面质量检查
+2. 运行全面质量检查：`bash scripts/full_check.sh`
 3. 确保所有彩票类型仍然正常工作
 
 ### 定期维护
 
-- **每周**: 运行 `quality_check.sh`
-- **每次提交前**: 运行 `quality_check.sh`
-- **每次发布前**: 运行完整测试套件
+- **每周**: 运行 `bash scripts/check.sh`
+- **每次提交前**: 运行 `bash scripts/check.sh`
+- **每次发布前**: 运行 `bash scripts/check.sh` 和完整测试套件
 
 ## 🎓 最佳实践
 
@@ -134,11 +160,16 @@ bash scripts/integration_check.sh ssq
 
 ### 添加新的检查项
 
-编辑对应的脚本文件，添加新的检查逻辑：
+编辑 `check.sh` 脚本，添加新的检查逻辑到对应的部分：
 
 ```bash
-# quality_check.sh - 添加全局检查
-# integration_check.sh - 添加集成检查
+# 第一部分：基础质量检查
+# 第二部分：文档完整性检查
+# 第三部分：项目清理检查
+# 第四部分：系统环境检查
+# 第五部分：运行时检查 - 命令执行
+# 第六部分：多彩票类型运行时检查
+# 第七部分：集成检查（可选）
 ```
 
 ### 更新检查清单

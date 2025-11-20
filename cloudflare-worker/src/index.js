@@ -562,7 +562,7 @@ export default {
     
     // 初始化数据库（重构为调用统一方法）
     if (url.pathname.startsWith('/init') && request.method === 'POST') {
-      // 提取彩票类型：/init/ssq、/init/dlt 或 /init/qxc，默认 ssq
+      // 提取彩票类型：/init/ssq、/init/dlt、/init/qxc 或 /init/qlc，默认 ssq
       const type = extractLotteryType(url.pathname) || 'ssq';
       try {
         const db = new Database(env.DB);

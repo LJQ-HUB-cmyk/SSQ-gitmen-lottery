@@ -728,6 +728,12 @@ find . -name "test_*.py" -not -path "./tests/*"
 - [ ] `lottery.py` 帮助文档与实际支持的类型一致
 - [ ] Worker 版本的类型列表与 Python 版本一致
 
+### .env 文件格式检查（会话 #5）
+- [ ] 环境变量赋值不能有空格（`KEY=value` 而不是 `KEY = value`）
+- [ ] 检查根目录 `.env`
+- [ ] 检查 `cloudflare-worker/.env`
+- [ ] 使用 `source .env` 测试是否能正常加载
+
 ### 验证命令
 ```bash
 # 检查配置一致性
@@ -736,6 +742,14 @@ from core.config import SUPPORTED_LOTTERIES, LOTTERY_NAMES
 assert set(SUPPORTED_LOTTERIES) == set(LOTTERY_NAMES.keys())
 print('✓ 配置一致')
 "
+
+# 检查 .env 文件格式（不应该有空格）
+grep " = " .env cloudflare-worker/.env
+# 如果有输出，说明格式错误
+
+# 测试 .env 文件能否正常加载
+source .env && echo "✓ 根目录 .env 正常"
+source cloudflare-worker/.env && echo "✓ Worker .env 正常"
 ```
 
 ## ✅ 核心逻辑保护（会话 #3）
