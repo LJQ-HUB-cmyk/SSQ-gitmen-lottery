@@ -49,8 +49,24 @@ else
     ((FAILED++))
 fi
 
-# 2. 配置验证
-echo "⚙️  验证配置..."
+# 1.5. Cloudflare Worker JavaScript 语法检查
+echo "📝 检查 Cloudflare Worker JavaScript 语法..."
+if command -v node &> /dev/null; then
+    JS_SYNTAX_ERRORS=$(find cloudflare-worker/src -name "*.js" -exec node -c {} \; 2>&1 | grep -c "SyntaxError" || true)
+    if [ "$JS_SYNTAX_ERRORS" -eq 0 ]; then
+        echo "✓ Worker JavaScript 语法检查通过"
+        ((PASSED++))
+    else
+        echo "✗ 发现 $JS_SYNTAX_ERRORS 个 JavaScript 语法错误"
+        ((FAILED++))
+    fi
+else
+    echo "⚠️  Node.js 未安装，跳过 JavaScript 语法检查"
+    ((WARNINGS++))
+fi
+
+# 2. Python 配置验证
+echo "⚙️  验证 Python 配置..."
 python -c "
 from core.config import SUPPORTED_LOTTERIES, LOTTERY_NAMES
 assert len(SUPPORTED_LOTTERIES) == len(LOTTERY_NAMES), '彩票类型数量不匹配'
@@ -59,8 +75,26 @@ print(f'✓ 支持的彩票类型: {SUPPORTED_LOTTERIES}')
 print(f'✓ 彩票名称映射: {list(LOTTERY_NAMES.keys())}')
 " && ((PASSED+=2)) || ((FAILED++))
 
-# 3. 模块验证
-echo "📦 验证模块..."
+# 2.5. Worker 配置验证
+echo "⚙️  验证 Worker 配置..."
+if [ -f "cloudflare-worker/src/index.js" ]; then
+    # 检查所有彩票类型是否在 Worker 配置中
+    for lottery in ssq dlt qxc qlc; do
+        if grep -q "lastIssue.*$lottery" cloudflare-worker/src/index.js 2>/dev/null || grep -q "'$lottery'" cloudflare-worker/src/index.js 2>/dev/null; then
+            echo "✓ Worker 支持 $lottery"
+            ((PASSED++))
+        else
+            echo "✗ Worker 不支持 $lottery"
+            ((FAILED++))
+        fi
+    done
+else
+    echo "✗ Worker 配置文件不存在"
+    ((FAILED++))
+fi
+
+# 3. Python 模块验证
+echo "📦 验证 Python 模块..."
 python -c "
 from cli.smart_fetch import get_lottery_modules
 for lottery_type in ['ssq', 'dlt', 'qxc', 'qlc']:
@@ -71,6 +105,29 @@ for lottery_type in ['ssq', 'dlt', 'qxc', 'qlc']:
         print(f'✗ {lottery_type}: {e}')
         exit(1)
 " && ((PASSED+=4)) || ((FAILED++))
+
+# 3.5. Worker 爬虫文件验证
+echo "📦 验证 Worker 爬虫文件..."
+for lottery in ssq dlt qxc qlc; do
+    if [ -f "cloudflare-worker/src/spiders/${lottery}.js" ]; then
+        echo "✓ cloudflare-worker/src/spiders/${lottery}.js 存在"
+        ((PASSED++))
+    else
+        echo "✗ cloudflare-worker/src/spiders/${lottery}.js 缺失"
+        ((FAILED++))
+    fi
+done
+
+echo "📦 验证 Worker 预测器文件..."
+for lottery in ssq dlt qxc qlc; do
+    if [ -f "cloudflare-worker/src/predictors/${lottery}.js" ]; then
+        echo "✓ cloudflare-worker/src/predictors/${lottery}.js 存在"
+        ((PASSED++))
+    else
+        echo "✗ cloudflare-worker/src/predictors/${lottery}.js 缺失"
+        ((FAILED++))
+    fi
+done
 
 # 4. 搜索遗漏
 echo "🔎 搜索可能的遗漏..."

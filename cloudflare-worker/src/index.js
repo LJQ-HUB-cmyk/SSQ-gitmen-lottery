@@ -55,25 +55,25 @@ function getLotteryModules(type) {
       name: '双色球',
       spider: SSQSpider,
       predictor: SSQPredictor,
-      startYear: 2003
+      lastIssue: '03000'  // 2003 年第 000 期（虚拟期号，实际从 001 开始）
     },
     dlt: {
       name: '大乐透',
       spider: DLTSpider,
       predictor: DLTPredictor,
-      startYear: 2007
+      lastIssue: '07000'  // 2007 年第 000 期（虚拟期号，实际从 001 开始）
     },
     qxc: {
       name: '七星彩',
       spider: QXCSpider,
       predictor: QXCPredictor,
-      startYear: 2004
+      lastIssue: '04100'  // 2004 年第 100 期（虚拟期号，实际从 101 开始）
     },
     qlc: {
       name: '七乐彩',
       spider: QLCSpider,
       predictor: QLCPredictor,
-      startYear: 2007
+      lastIssue: '07000'  // 2007 年第 000 期（虚拟期号，实际从 001 开始）
     }
   };
   
@@ -163,15 +163,17 @@ async function smartFetch(type, env, options = {}) {
         console.log(`同年继续: ${latestNo} -> ${startIssue}-${endIssue}`);
       }
     } else {
-      // 数据库为空：从起始年份开始
-      const startYear = modules.startYear;
-      const startYearShort = startYear.toString().substring(2);
-      startIssue = `${startYearShort}001`;
+      // 数据库为空：从最后期号 +1 开始
+      const lastIssue = modules.lastIssue;
+      const yearShort = lastIssue.substring(0, 2);
+      const lastIssueNum = parseInt(lastIssue.substring(2));
+      const startIssueNum = lastIssueNum + 1;
+      startIssue = `${yearShort}${startIssueNum.toString().padStart(3, '0')}`;
       
       // 计算结束期号（小批量）
       const endIssueNum = Math.min(BATCH_SIZE, 200);
-      endIssue = `${startYearShort}${endIssueNum.toString().padStart(3, '0')}`;
-      console.log(`数据库为空，从起始年份 ${startYear} 开始`);
+      endIssue = `${yearShort}${endIssueNum.toString().padStart(3, '0')}`;
+      console.log(`数据库为空，从最后期号 ${lastIssue} 的下一期 ${startIssue} 开始`);
     }
     
     console.log(`爬取期号范围: ${startIssue} - ${endIssue}`);
@@ -190,7 +192,10 @@ async function smartFetch(type, env, options = {}) {
       const nextYearShort = nextYear.toString().substring(2);
       
       // 计算跨年后的新查询范围
-      const crossYearStart = `${nextYearShort}001`;
+      // 使用最后期号的后三位 +1 作为跨年的起始期号
+      const lastIssueNum = parseInt(modules.lastIssue.substring(2));
+      const crossYearStartNum = lastIssueNum + 1;
+      const crossYearStart = `${nextYearShort}${crossYearStartNum.toString().padStart(3, '0')}`;
       const crossYearEnd = `${nextYearShort}${Math.min(BATCH_SIZE, 200).toString().padStart(3, '0')}`;
       
       console.log(`第${retryCount}次重试：${startIssue}-${endIssue} 无数据，跨年到 ${crossYearStart}-${crossYearEnd}`);

@@ -38,8 +38,9 @@ class QXCSpider:
         统一的爬取接口
         
         Args:
-            start_issue: 起始期号（5位格式，如 '04001'）
-            end_issue: 结束期号（5位格式，如 '25133'）
+            start_issue: 起始期号（5位格式，如 '04101'）
+            end_issue: 结束期号（5位格式，如 '04200'）
+                      如果为 None，则从 start_issue 开始获取全量数据（扩展功能）
             count: 获取最新 N 条（仅当 start/end 都为 None 时使用）
             
         Returns:
@@ -56,8 +57,13 @@ class QXCSpider:
             raise Exception("未获取到数据")
         
         # 场景2: 按期号范围获取
-        url = f"{self.BASE_URL}?start={start_issue}&end={end_issue}"
-        logger.info(f"从 500.com 获取七星彩期号范围数据: {start_issue} - {end_issue}")
+        # 扩展功能：不传 end_issue 时，从 start_issue 开始获取全量数据
+        if end_issue is None:
+            url = f"{self.BASE_URL}?start={start_issue}"
+            logger.info(f"从 500.com 获取七星彩全量数据（从 {start_issue} 开始）")
+        else:
+            url = f"{self.BASE_URL}?start={start_issue}&end={end_issue}"
+            logger.info(f"从 500.com 获取七星彩期号范围数据: {start_issue} - {end_issue}")
         
         try:
             response = self.session.get(url, headers=self.HEADERS, timeout=self.timeout)

@@ -12,8 +12,9 @@ export class QXCSpider {
 
   /**
    * 爬取七星彩数据
-   * @param {string} startIssue - 起始期号（5位，如 25001）
-   * @param {string} endIssue - 结束期号（5位，如 25050）
+   * @param {string} startIssue - 起始期号（5位，如 04101）
+   * @param {string} endIssue - 结束期号（5位，如 04200）
+   *                           如果为 null，则从 startIssue 开始获取全量数据（扩展功能）
    * @returns {Array} 数据数组
    */
   async fetch(startIssue, endIssue) {
@@ -37,8 +38,15 @@ export class QXCSpider {
       return data;
     }
 
-    const url = `${this.baseUrl}?start=${startIssue}&end=${endIssue}`;
-    console.log(`从 500.com 获取七星彩期号范围数据: ${startIssue} - ${endIssue}`);
+    // 扩展功能：不传 endIssue 时，从 startIssue 开始获取全量数据
+    let url;
+    if (endIssue === null || endIssue === undefined) {
+      url = `${this.baseUrl}?start=${startIssue}`;
+      console.log(`从 500.com 获取七星彩全量数据（从 ${startIssue} 开始）`);
+    } else {
+      url = `${this.baseUrl}?start=${startIssue}&end=${endIssue}`;
+      console.log(`从 500.com 获取七星彩期号范围数据: ${startIssue} - ${endIssue}`);
+    }
     
     const response = await fetch(url, {
       headers: this.headers
@@ -71,8 +79,9 @@ export class QXCSpider {
   parse500Html(html, latestOnly = false) {
     const data = [];
     
-    // 修正正则：匹配期号、号码、跳过和值和销售额、匹配日期
-    const rowRegex = /<tr class="t_tr1">.*?<td class="t_tr1">(\d+)<\/td><td class="cfont2">([\d\s]+)<span.*?<td class="t_tr1">\d+<\/td><td class="t_tr1">([\d-]+)<\/td>/g;
+    // 使用更灵活的正则表达式，不依赖于<span>标签
+    // 匹配: <tr...> ... <td...>期号</td><td...>号码</td> ... <td...>日期</td>
+    const rowRegex = /<tr[^>]*>.*?<td[^>]*>(\d+)<\/td><td[^>]*>([\d\s]+)<\/td>.*?<td[^>]*>[\d,]+<\/td>.*?<td[^>]*>[\d,]+<\/td>.*?<td[^>]*>([\d-]+)<\/td>/gs;
     
     let match;
     while ((match = rowRegex.exec(html)) !== null) {

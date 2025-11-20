@@ -17,28 +17,28 @@ def get_lottery_modules(lottery_type: str):
     modules = {
         'ssq': {
             'name': '双色球',
-            'start_year': 2003,
+            'last_issue': '03000',  # 2003 年第 000 期（虚拟期号，实际从 001 开始）
             'spider_class': 'lotteries.ssq.spider.SSQSpider',
             'database_class': 'lotteries.ssq.database.SSQDatabase',
             'predictor_class': 'lotteries.ssq.predictor.SSQPredictor'
         },
         'dlt': {
             'name': '大乐透',
-            'start_year': 2007,
+            'last_issue': '07000',  # 2007 年第 000 期（虚拟期号，实际从 001 开始）
             'spider_class': 'lotteries.dlt.spider.DLTSpider',
             'database_class': 'lotteries.dlt.database.DLTDatabase',
             'predictor_class': 'lotteries.dlt.predictor.DLTPredictor'
         },
         'qxc': {
             'name': '七星彩',
-            'start_year': 2004,
+            'last_issue': '04100',  # 2004 年第 100 期（虚拟期号，实际从 101 开始）
             'spider_class': 'lotteries.qxc.spider.QXCSpider',
             'database_class': 'lotteries.qxc.database.QXCDatabase',
             'predictor_class': 'lotteries.qxc.predictor.QXCPredictor'
         },
         'qlc': {
             'name': '七乐彩',
-            'start_year': 2007,
+            'last_issue': '07000',  # 2007 年第 000 期（虚拟期号，实际从 001 开始）
             'spider_class': 'lotteries.qlc.spider.QLCSpider',
             'database_class': 'lotteries.qlc.database.QLCDatabase',
             'predictor_class': 'lotteries.qlc.predictor.QLCPredictor'
@@ -159,11 +159,14 @@ def _fetch_incremental(spider, db, modules, lottery_type, **options) -> Dict:
             end_issue = f"{year_part}200"
             logger.info(f"同年爬取：继续 {2000 + int(year_part)} 年")
     else:
-        # 数据库为空，从起始年份开始
-        start_year_short = str(modules['start_year'])[2:]
-        start_issue = f"{start_year_short}001"
-        end_issue = f"{start_year_short}200"
-        logger.info(f"数据库为空，从起始年份 {modules['start_year']} 开始")
+        # 数据库为空，从最后期号 +1 开始
+        last_issue = modules['last_issue']
+        year_short = last_issue[:2]
+        last_issue_num = int(last_issue[2:])
+        start_issue_num = last_issue_num + 1
+        start_issue = f"{year_short}{start_issue_num:03d}"
+        end_issue = f"{year_short}200"
+        logger.info(f"数据库为空，从最后期号 {last_issue} 的下一期 {start_issue} 开始")
     
     logger.info(f"爬取期号范围: {start_issue} - {end_issue}")
     
@@ -191,10 +194,11 @@ def _fetch_incremental(spider, db, modules, lottery_type, **options) -> Dict:
 
 def _fetch_full_history(spider, db, modules, lottery_type, **options) -> Dict:
     """全量爬取逻辑（按年份推进，自动查找缺失年份）"""
-    start_year = modules['start_year']
+    last_issue = modules['last_issue']
+    start_year = int('20' + last_issue[:2])
     current_year = datetime.now().year
     
-    logger.info(f"起始年份: {start_year}, 当前年份: {current_year}")
+    logger.info(f"最后期号: {last_issue}, 起始年份: {start_year}, 当前年份: {current_year}")
     
     total_inserted = 0
     year_count = 0
@@ -206,11 +210,11 @@ def _fetch_full_history(spider, db, modules, lottery_type, **options) -> Dict:
         
         for year in range(start_year, current_year + 1):
             year_short = str(year)[2:]
-            first_issue = f"20{year_short}001"  # 7位格式：2003001
+            first_issue_of_year = f"20{year_short}001"  # 7位格式：2003001
             
             # 检查该年份的第一期是否存在
             latest = db.get_latest_lottery()
-            if not latest or latest['lottery_no'] < first_issue:
+            if not latest or latest['lottery_no'] < first_issue_of_year:
                 target_year = year
                 break
         
