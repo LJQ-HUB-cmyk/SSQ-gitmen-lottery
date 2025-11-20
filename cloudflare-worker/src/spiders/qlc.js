@@ -80,13 +80,97 @@ export class QLCSpider {
     const data = [];
     
     try {
-      // 提取表格数据
-      const tbodyMatch = html.match(/<tbody[^>]*id="tdata"[^>]*>([\s\S]*?)<\/tbody>/i);
+      // 七乐彩的表格结构：<table id="tablelist"> 直接包含 <tr>，没有 <tbody>
+      // 先尝试找 id="tablelist" 的表格
+      let tableMatch = html.match(/<table[^>]*id="tablelist"[^>]*>([\s\S]*?)<\/table>/i);
       
-      if (!tbodyMatch) {
-        console.log('未找到数据表格');
+      if (!tableMatch) {
+        // 尝试找 id="tdata" 的 tbody
+        tableMatch = html.match(/<tbody[^>]*id="tdata"[^>]*>([\s\S]*?)<\/tbody>/i);
+      }
+      
+      if (!tableMatch) {
+        console.log('⚠️ 未找到表格，尝试直接匹配 <tr> 行...');
+        tableMatch = [null, html];  // 使用整个 HTML
+      }
+      
+      const tableContent = tableMatch[1];
+      
+      // 提取所有 <tr class="t_tr1"> 行（数据行）
+      const trMatches = [...tableContent.matchAll(/<tr[^>]*class="t_tr1"[^>]*>([\s\S]*?)<\/tr>/gi)];
+      console.log(`找到 ${trMatches.length} 行数据`);
+      
+      if (trMatches.length === 0) {
+        console.log('❌ 未找到任何数据行');
         return data;
       }
+      
+      // 处理找到的行
+      for (const trMatch of trMatches) {
+        const tr = trMatch[1];
+        const tdMatches = [...tr.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)];
+        
+        if (tdMatches.length < 5) continue;
+        
+        try {
+          const texts = tdMatches.map(m => m[1].replace(/<[^>]+>/g, '').replace(/&nbsp;/g, '').replace(/,/g, '').trim());
+          
+          // 七乐彩表格结构：
+          // 第0列: 期号
+          // 第1列: 7个基本号 + 1个特别号（用空格分隔）
+          // 第2列: 和值
+          // 第3列: 销售额
+          // 第4列: 开奖日期
+          
+          let lotteryNo = texts[0];
+          if (lotteryNo && /^\d{5}$/.test(lotteryNo)) {
+            lotteryNo = '20' + lotteryNo;
+          }
+          
+          // 从第1列提取8个数字（7个基本号 + 1个特别号）
+          const numbersStr = texts[1];
+          const numbers = numbersStr.split(/\s+/).map(n => parseInt(n)).filter(n => !isNaN(n));
+          const drawDate = texts[texts.length - 1];
+          
+          if (lotteryNo && 
+              numbers.length === 8 && 
+              drawDate &&
+              /^\d{7}$/.test(lotteryNo) &&
+              /^\d{4}-\d{2}-\d{2}$/.test(drawDate)) {
+            
+            const basicBalls = numbers.slice(0, 7);
+            const specialBall = numbers[7];
+            
+            data.push({
+              lottery_no: lotteryNo,
+              draw_date: drawDate,
+              basic1: String(basicBalls[0]),
+              basic2: String(basicBalls[1]),
+              basic3: String(basicBalls[2]),
+              basic4: String(basicBalls[3]),
+              basic5: String(basicBalls[4]),
+              basic6: String(basicBalls[5]),
+              basic7: String(basicBalls[6]),
+              special: String(specialBall),
+              sorted_code: [...basicBalls].sort((a,b) => a-b).map(n => String(n).padStart(2, '0')).join(',') + '-' + String(specialBall).padStart(2, '0')
+            });
+            
+            if (latestOnly && data.length === 1) {
+              console.log(`成功解析最新数据: ${lotteryNo}`);
+              return data;
+            }
+          }
+        } catch (e) {
+          console.error('解析行数据失败:', e);
+        }
+      }
+      
+      if (!latestOnly) {
+        console.log(`成功解析 ${data.length} 条七乐彩数据`);
+      }
+    } catch (error) {
+      console.error('解析 HTML 失败:', error);
+    }
       
       const tbody = tbodyMatch[1];
       const cleanTbody = tbody.replace(/<!--[\s\S]*?-->/g, '');
