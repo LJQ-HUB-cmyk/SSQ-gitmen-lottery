@@ -760,6 +760,7 @@ else
         fi
         echo "  ✓ init.sh 全量初始化成功"
         ((PASSED++))
+        INIT_SUCCESS=true
         echo ""
         
         # ========================================================================
@@ -897,7 +898,7 @@ else
     echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     RESPONSE=$(curl -s "$WORKER_URL/stats" 2>&1)
     echo "$RESPONSE" | tee -a "$LOG_FILE"
-    if echo "$RESPONSE" | grep -q "success\|stats\|data"; then
+    if echo "$RESPONSE" | grep -q "lottery_type\|total_count\|ssq\|dlt"; then
         echo "  ✓ GET /stats 执行成功"
         ((PASSED++))
     else
@@ -912,7 +913,7 @@ else
         echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         RESPONSE=$(curl -s "$WORKER_URL/stats/$lottery" 2>&1)
         echo "$RESPONSE" | tee -a "$LOG_FILE"
-        if echo "$RESPONSE" | grep -q "success\|stats\|data"; then
+        if echo "$RESPONSE" | grep -q "lottery_type\|total_count"; then
             echo "  ✓ GET /stats/$lottery 执行成功"
             ((PASSED++))
         else

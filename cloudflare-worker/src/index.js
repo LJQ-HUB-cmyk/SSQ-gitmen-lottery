@@ -979,12 +979,31 @@ export default {
           const stats = {
             lottery_type: type,
             lottery_name: modules.name,
-            total_count: count,
-            top_red_balls: frequency.red ? convertToArray(frequency.red).slice(0, 10) : undefined,
-            top_blue_balls: frequency.blue ? convertToArray(frequency.blue).slice(0, 5) : undefined,
-            top_front_balls: frequency.front ? convertToArray(frequency.front).slice(0, 10) : undefined,
-            top_back_balls: frequency.back ? convertToArray(frequency.back).slice(0, 5) : undefined
+            total_count: count
           };
+          
+          // 根据彩票类型添加相应的频率统计
+          if (frequency.red) {
+            stats.top_red_balls = convertToArray(frequency.red).slice(0, 10);
+          }
+          if (frequency.blue) {
+            stats.top_blue_balls = convertToArray(frequency.blue).slice(0, 5);
+          }
+          if (frequency.front) {
+            stats.top_front_balls = convertToArray(frequency.front).slice(0, 10);
+          }
+          if (frequency.back) {
+            stats.top_back_balls = convertToArray(frequency.back).slice(0, 5);
+          }
+          if (frequency.numbers) {
+            stats.top_numbers = convertToArray(frequency.numbers).slice(0, 10);
+          }
+          if (frequency.basic) {
+            stats.top_basic_balls = convertToArray(frequency.basic).slice(0, 10);
+          }
+          if (frequency.special) {
+            stats.top_special_balls = convertToArray(frequency.special).slice(0, 5);
+          }
           
           return new Response(JSON.stringify(stats, null, 2), {
             headers: { 'Content-Type': 'application/json; charset=utf-8' }
@@ -999,15 +1018,36 @@ export default {
             const frequency = await db.getFrequency(type);
             const count = await db.getCount(type);
             
-            allStats.push({
+            const stats = {
               lottery_type: type,
               lottery_name: modules.name,
-              total_count: count,
-              top_red_balls: frequency.red ? convertToArray(frequency.red).slice(0, 10) : undefined,
-              top_blue_balls: frequency.blue ? convertToArray(frequency.blue).slice(0, 5) : undefined,
-              top_front_balls: frequency.front ? convertToArray(frequency.front).slice(0, 10) : undefined,
-              top_back_balls: frequency.back ? convertToArray(frequency.back).slice(0, 5) : undefined
-            });
+              total_count: count
+            };
+            
+            // 根据彩票类型添加相应的频率统计
+            if (frequency.red) {
+              stats.top_red_balls = convertToArray(frequency.red).slice(0, 10);
+            }
+            if (frequency.blue) {
+              stats.top_blue_balls = convertToArray(frequency.blue).slice(0, 5);
+            }
+            if (frequency.front) {
+              stats.top_front_balls = convertToArray(frequency.front).slice(0, 10);
+            }
+            if (frequency.back) {
+              stats.top_back_balls = convertToArray(frequency.back).slice(0, 5);
+            }
+            if (frequency.numbers) {
+              stats.top_numbers = convertToArray(frequency.numbers).slice(0, 10);
+            }
+            if (frequency.basic) {
+              stats.top_basic_balls = convertToArray(frequency.basic).slice(0, 10);
+            }
+            if (frequency.special) {
+              stats.top_special_balls = convertToArray(frequency.special).slice(0, 5);
+            }
+            
+            allStats.push(stats);
           }
           
           return new Response(JSON.stringify(allStats, null, 2), {
