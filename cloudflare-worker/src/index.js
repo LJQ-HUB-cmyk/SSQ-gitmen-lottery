@@ -267,42 +267,142 @@ async function smartFetch(type, env, options = {}) {
 }
 
 /**
- * 构建预测消息
+ * 构建通知消息（包含新数据和预测）
+ */
+function buildNotificationMessage(lotteryName, lotteryType, result) {
+  let message = '';
+  
+  // 如果有新数据，先显示新开奖数据
+  if (result.hasNewData && result.latest) {
+    message += `🎰 <b>${lotteryName}开奖</b>\n\n`;
+    message += `期号: ${result.latest.lottery_no}\n`;
+    message += `日期: ${result.latest.draw_date}\n`;
+    
+    if (lotteryType === 'ssq') {
+      const redStr = [
+        result.latest.red1, result.latest.red2, result.latest.red3,
+        result.latest.red4, result.latest.red5, result.latest.red6
+      ].map(b => String(b).padStart(2, '0')).join(' ');
+      message += `🔴 <code>${redStr}</code>\n`;
+      message += `🔵 <code>${String(result.latest.blue).padStart(2, '0')}</code>\n`;
+    } else if (lotteryType === 'dlt') {
+      const frontStr = [
+        result.latest.front1, result.latest.front2, result.latest.front3,
+        result.latest.front4, result.latest.front5
+      ].map(b => String(b).padStart(2, '0')).join(' ');
+      const backStr = [result.latest.back1, result.latest.back2]
+        .map(b => String(b).padStart(2, '0')).join(' ');
+      message += `🔴 前区: <code>${frontStr}</code>\n`;
+      message += `🔵 后区: <code>${backStr}</code>\n`;
+    } else if (lotteryType === 'qxc') {
+      const numbersStr = [
+        result.latest.num1, result.latest.num2, result.latest.num3,
+        result.latest.num4, result.latest.num5, result.latest.num6,
+        result.latest.num7
+      ].map(n => String(n)).join(' ');
+      message += `🔢 <code>${numbersStr}</code>\n`;
+    } else if (lotteryType === 'qlc') {
+      const basicStr = [
+        result.latest.basic1, result.latest.basic2, result.latest.basic3,
+        result.latest.basic4, result.latest.basic5, result.latest.basic6,
+        result.latest.basic7
+      ].map(b => String(b).padStart(2, '0')).join(' ');
+      const specialStr = String(result.latest.special).padStart(2, '0');
+      message += `🔴 基本号: <code>${basicStr}</code>\n`;
+      message += `🔵 特别号: <code>${specialStr}</code>\n`;
+    }
+    
+    message += `\n━━━━━━━━━━━━━━━\n\n`;
+  }
+  
+  // 预测结果（总是显示）
+  message += `🔮 <b>${lotteryName}预测</b>\n\n`;
+  
+  const predictions = result.predictions;
+  if (predictions && Array.isArray(predictions) && predictions.length > 0) {
+    for (let i = 0; i < predictions.length; i++) {
+      const pred = predictions[i];
+      const strategyName = pred.strategy_name || pred.strategy || '';
+      
+      message += `<b>组合 ${i + 1}:</b>`;
+      
+      if (strategyName) {
+        message += ` <i>[${strategyName}]</i>`;
+      }
+      
+      message += `\n`;
+      
+      if (lotteryType === 'ssq') {
+        const redStr = pred.red_balls.map(b => String(b).padStart(2, '0')).join(' ');
+        message += `🔴 <code>${redStr}</code>\n`;
+        message += `🔵 <code>${String(pred.blue_ball).padStart(2, '0')}</code>\n\n`;
+      } else if (lotteryType === 'dlt') {
+        const frontStr = pred.front_balls.map(b => String(b).padStart(2, '0')).join(' ');
+        const backStr = pred.back_balls.map(b => String(b).padStart(2, '0')).join(' ');
+        message += `🔴 前区: <code>${frontStr}</code>\n`;
+        message += `🔵 后区: <code>${backStr}</code>\n\n`;
+      } else if (lotteryType === 'qxc') {
+        const numbersStr = pred.numbers.map(n => String(n)).join(' ');
+        message += `🔢 <code>${numbersStr}</code>\n\n`;
+      } else if (lotteryType === 'qlc') {
+        const basicStr = pred.basic_balls.map(b => String(b).padStart(2, '0')).join(' ');
+        const specialStr = String(pred.special_ball).padStart(2, '0');
+        message += `🔴 基本号: <code>${basicStr}</code>\n`;
+        message += `🔵 特别号: <code>${specialStr}</code>\n\n`;
+      }
+    }
+  } else {
+    message += `⚠️ 暂时无法生成预测\n`;
+  }
+  
+  message += `━━━━━━━━━━━━━━━\n`;
+  message += `⚠️ 仅供参考，理性购彩`;
+  
+  return message;
+}
+
+/**
+ * 构建预测消息（仅预测，用于手动预测接口）
  */
 function buildPredictionMessage(lotteryName, lotteryType, predictions) {
-  let message = `🔮 ${lotteryName}预测\n`;
+  let message = `🔮 <b>${lotteryName}预测</b>\n\n`;
   
   // 预测结果
   if (predictions && Array.isArray(predictions) && predictions.length > 0) {
     for (let i = 0; i < predictions.length; i++) {
       const pred = predictions[i];
-      const strategyName = pred.strategy_name || pred.strategy || '未知策略';
+      const strategyName = pred.strategy_name || pred.strategy || '';
       
-      message += `组合 ${i + 1}: [${strategyName}]\n`;
+      message += `<b>组合 ${i + 1}:</b>`;
+      
+      if (strategyName) {
+        message += ` <i>[${strategyName}]</i>`;
+      }
+      
+      message += `\n`;
       
       if (lotteryType === 'ssq') {
         const redStr = pred.red_balls.map(b => String(b).padStart(2, '0')).join(' ');
-        message += `🔴 红球: ${redStr}\n`;
-        message += `🔵 蓝球: ${String(pred.blue_ball).padStart(2, '0')}\n\n`;
+        message += `🔴 <code>${redStr}</code>\n`;
+        message += `🔵 <code>${String(pred.blue_ball).padStart(2, '0')}</code>\n\n`;
       } else if (lotteryType === 'dlt') {
         const frontStr = pred.front_balls.map(b => String(b).padStart(2, '0')).join(' ');
         const backStr = pred.back_balls.map(b => String(b).padStart(2, '0')).join(' ');
-        message += `🔴 前区: ${frontStr}\n`;
-        message += `🔵 后区: ${backStr}\n\n`;
+        message += `🔴 前区: <code>${frontStr}</code>\n`;
+        message += `🔵 后区: <code>${backStr}</code>\n\n`;
       } else if (lotteryType === 'qxc') {
         const numbersStr = pred.numbers.map(n => String(n)).join(' ');
-        message += `🔢 号码: ${numbersStr}\n\n`;
+        message += `🔢 <code>${numbersStr}</code>\n\n`;
       } else if (lotteryType === 'qlc') {
         const basicStr = pred.basic_balls.map(b => String(b).padStart(2, '0')).join(' ');
         const specialStr = String(pred.special_ball).padStart(2, '0');
-        message += `🔴 基本号: ${basicStr}\n`;
-        message += `🔵 特别号: ${specialStr}\n\n`;
+        message += `🔴 基本号: <code>${basicStr}</code>\n`;
+        message += `🔵 特别号: <code>${specialStr}</code>\n\n`;
       }
     }
   } else {
     // 没有预测结果时的提示
     message += `⚠️ 暂时无法生成预测\n`;
-    message += `请稍后再试或检查数据状态\n`;
   }
   
   message += `━━━━━━━━━━━━━━━\n`;
@@ -432,28 +532,27 @@ async function runDailyTask(env) {
       };
     }
     
-    // 总是发送 Telegram 通知（无论是否有新数据，只要处理成功就发送）
+    // 发送 Telegram 通知（总是发送，包含新数据和预测）
     const results = [ssqResult, dltResult, qxcResult, qlcResult].filter(r => r.success);
     
-    // 构建所有消息（使用统一的消息构建函数）
+    // 构建所有消息（使用新的通知消息构建函数）
     const messages = results.map(result => {
-      // 检查是否有预测结果
-      if (!result.predictions || result.predictions.length === 0) {
-        console.warn(`${result.name} 无预测结果，但仍然发送通知`);
-      }
-      
-      const message = buildPredictionMessage(result.name, result.type, result.predictions);
-      return { name: result.name, content: message };
+      // 使用 buildNotificationMessage，会根据 hasNewData 自动决定消息格式
+      // 有新数据：显示开奖数据 + 预测
+      // 无新数据：只显示预测
+      const message = buildNotificationMessage(result.name, result.type, result);
+      return { name: result.name, content: message, hasNewData: result.hasNewData };
     });
     
     // 并行发送所有消息（优化：减少等待时间）
     console.log(`\n准备发送 ${messages.length} 条 Telegram 通知...`);
     await Promise.all(
-      messages.map(msg => 
-        telegram.sendMessage(msg.content)
-          .then(() => console.log(`✓ ${msg.name} Telegram 通知已发送`))
-          .catch(err => console.error(`✗ ${msg.name} Telegram 通知发送失败:`, err))
-      )
+      messages.map(msg => {
+        const dataInfo = msg.hasNewData ? '(有新数据)' : '(仅预测)';
+        return telegram.sendMessage(msg.content)
+          .then(() => console.log(`✓ ${msg.name} ${dataInfo} Telegram 通知已发送`))
+          .catch(err => console.error(`✗ ${msg.name} Telegram 通知发送失败:`, err));
+      })
     );
     
     console.log('✅ 每日任务执行完成');
