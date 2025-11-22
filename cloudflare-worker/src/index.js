@@ -279,35 +279,24 @@ function buildNotificationMessage(lotteryName, lotteryType, result) {
     message += `日期: ${result.latest.draw_date}\n`;
     
     if (lotteryType === 'ssq') {
-      const redStr = [
-        result.latest.red1, result.latest.red2, result.latest.red3,
-        result.latest.red4, result.latest.red5, result.latest.red6
-      ].map(b => String(b).padStart(2, '0')).join(' ');
+      // getLatest 返回的是 red_balls 数组和 blue_ball
+      const redStr = result.latest.red_balls.map(b => String(b).padStart(2, '0')).join(' ');
       message += `🔴 <code>${redStr}</code>\n`;
-      message += `🔵 <code>${String(result.latest.blue).padStart(2, '0')}</code>\n`;
+      message += `🔵 <code>${String(result.latest.blue_ball).padStart(2, '0')}</code>\n`;
     } else if (lotteryType === 'dlt') {
-      const frontStr = [
-        result.latest.front1, result.latest.front2, result.latest.front3,
-        result.latest.front4, result.latest.front5
-      ].map(b => String(b).padStart(2, '0')).join(' ');
-      const backStr = [result.latest.back1, result.latest.back2]
-        .map(b => String(b).padStart(2, '0')).join(' ');
+      // getLatest 返回的是 front_balls 和 back_balls 数组
+      const frontStr = result.latest.front_balls.map(b => String(b).padStart(2, '0')).join(' ');
+      const backStr = result.latest.back_balls.map(b => String(b).padStart(2, '0')).join(' ');
       message += `🔴 前区: <code>${frontStr}</code>\n`;
       message += `🔵 后区: <code>${backStr}</code>\n`;
     } else if (lotteryType === 'qxc') {
-      const numbersStr = [
-        result.latest.num1, result.latest.num2, result.latest.num3,
-        result.latest.num4, result.latest.num5, result.latest.num6,
-        result.latest.num7
-      ].map(n => String(n)).join(' ');
+      // getLatest 返回的是 numbers 数组
+      const numbersStr = result.latest.numbers.map(n => String(n)).join(' ');
       message += `🔢 <code>${numbersStr}</code>\n`;
     } else if (lotteryType === 'qlc') {
-      const basicStr = [
-        result.latest.basic1, result.latest.basic2, result.latest.basic3,
-        result.latest.basic4, result.latest.basic5, result.latest.basic6,
-        result.latest.basic7
-      ].map(b => String(b).padStart(2, '0')).join(' ');
-      const specialStr = String(result.latest.special).padStart(2, '0');
+      // getLatest 返回的是 basic_balls 数组和 special_ball
+      const basicStr = result.latest.basic_balls.map(b => String(b).padStart(2, '0')).join(' ');
+      const specialStr = String(result.latest.special_ball).padStart(2, '0');
       message += `🔴 基本号: <code>${basicStr}</code>\n`;
       message += `🔵 特别号: <code>${specialStr}</code>\n`;
     }
