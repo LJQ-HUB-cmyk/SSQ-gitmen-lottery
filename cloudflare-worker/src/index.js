@@ -1130,7 +1130,14 @@ export default {
    */
   async scheduled(event, env, ctx) {
     const startTime = Date.now();
-    console.log('⏰ Cron 触发器执行:', event.cron, new Date().toISOString());
+    const now = new Date();
+    const utcTime = now.toISOString();
+    const chinaTime = new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
+    console.log('⏰ Cron 触发器执行:');
+    console.log('  - Cron 表达式:', event.cron);
+    console.log('  - UTC 时间:', utcTime);
+    console.log('  - 北京时间:', chinaTime);
+    console.log('  - 配置时间: 00 14 * * * (UTC 14:00 / 北京时间 22:00)');
     
     // 使用 waitUntil 确保任务完成（即使响应已返回）
     ctx.waitUntil(
