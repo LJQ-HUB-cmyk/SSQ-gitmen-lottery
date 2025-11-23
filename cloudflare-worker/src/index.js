@@ -496,6 +496,21 @@ async function processSingleLottery(type, env, config) {
 async function runDailyTask(env) {
   console.log('🎰 每日任务开始执行:', new Date().toISOString());
   
+  // 防重复执行：检查是否正在执行
+  const isRunning = await env.KV_BINDING.get('task_running');
+  if (isRunning === 'true') {
+    console.log('⚠️ 任务正在执行中，跳过本次触发');
+    return { 
+      success: false, 
+      message: '任务正在执行中，跳过重复触发',
+      skipped: true 
+    };
+  }
+  
+  // 设置执行标志（10分钟过期，防止异常情况下锁未释放）
+  await env.KV_BINDING.put('task_running', 'true', { expirationTtl: 600 });
+  console.log('✓ 已设置任务执行锁');
+  
   const taskStartTime = Date.now();
   const maxTaskTime = 8000; // 全局任务最大执行时间 8 秒（免费计划优化）
   
@@ -566,6 +581,14 @@ async function runDailyTask(env) {
       success: false,
       message: error.message
     };
+  } finally {
+    // 清除执行标志（无论成功还是失败）
+    try {
+      await env.KV_BINDING.delete('task_running');
+      console.log('✓ 已清除任务执行锁');
+    } catch (e) {
+      console.error('清除执行锁失败:', e);
+    }
   }
 }
 

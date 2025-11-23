@@ -31,12 +31,12 @@ binding = "KV_BINDING"
 id = "60a5e4f34c4e46e9aedcf7a3cb4d52ea"
 
 # Cron 触发器配置
-# 每天 10:00 北京时间执行（UTC 时间 14:00）
+# 每天晚上22:00 北京时间执行（UTC 时间 14:00）
 [triggers]
 crons = ["00 14 * * *"]
 
 # 说明：
-# 1. Cron 表达式: "30 13 * * *" = 每天 UTC 13:30 = 北京时间 21:30
+# 1. Cron 表达式: "00 14 * * *"每天晚上22:00 北京时间执行（UTC 时间 14:00）
 # 2. 配置信息存储在 KV 中：
 #    - TELEGRAM_BOT_TOKEN
 #    - TELEGRAM_CHAT_ID
