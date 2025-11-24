@@ -267,6 +267,39 @@ async function smartFetch(type, env, options = {}) {
 }
 
 /**
+ * 构建开奖消息（只包含开奖数据）
+ */
+function buildDrawMessage(lotteryName, lotteryType, latest) {
+  let message = `🎰 <b>${lotteryName}开奖</b>\n\n`;
+  message += `期号: ${latest.lottery_no}\n`;
+  message += `日期: ${latest.draw_date}\n`;
+  
+  if (lotteryType === 'ssq') {
+    const redStr = latest.red_balls.map(b => String(b).padStart(2, '0')).join(' ');
+    message += `🔴 <code>${redStr}</code>\n`;
+    message += `🔵 <code>${String(latest.blue_ball).padStart(2, '0')}</code>\n`;
+  } else if (lotteryType === 'dlt') {
+    const frontStr = latest.front_balls.map(b => String(b).padStart(2, '0')).join(' ');
+    const backStr = latest.back_balls.map(b => String(b).padStart(2, '0')).join(' ');
+    message += `🔴 前区: <code>${frontStr}</code>\n`;
+    message += `🔵 后区: <code>${backStr}</code>\n`;
+  } else if (lotteryType === 'qxc') {
+    const numbersStr = latest.numbers.map(n => String(n)).join(' ');
+    message += `🔢 <code>${numbersStr}</code>\n`;
+  } else if (lotteryType === 'qlc') {
+    const basicStr = latest.basic_balls.map(b => String(b).padStart(2, '0')).join(' ');
+    const specialStr = String(latest.special_ball).padStart(2, '0');
+    message += `🔴 基本号: <code>${basicStr}</code>\n`;
+    message += `🔵 特别号: <code>${specialStr}</code>\n`;
+  }
+  
+  message += `\n━━━━━━━━━━━━━━━\n`;
+  message += `⚠️ 仅供参考，理性购彩`;
+  
+  return message;
+}
+
+/**
  * 构建通知消息（包含新数据和预测）
  */
 function buildNotificationMessage(lotteryName, lotteryType, result) {
@@ -403,50 +436,45 @@ function buildPredictionMessage(lotteryName, lotteryType, predictions) {
 /**
  * 处理单个彩票类型的增量更新和预测
  */
-async function processSingleLottery(type, env, config) {
+async function processSingleLottery(type, env, config, telegram) {
   const startTime = Date.now();
   const maxProcessTime = 3000; // 单个彩票类型最大处理时间 3 秒
   const modules = getLotteryModules(type);
   
   try {
-    // 调用统一的智能爬取方法
+    // 步骤 1: 爬取数据
     const fetchResult = await smartFetch(type, env, { batchSize: 50 });
     
     if (!fetchResult.success) {
+      console.error(`${modules.name} 爬取失败: ${fetchResult.error}`);
       return {
         type: type,
         name: modules.name,
         success: false,
-        message: fetchResult.error,
-        hasNewData: false,
-        predictions: []
+        message: fetchResult.error
       };
     }
     
-    // 获取最新一期（用于返回和显示）
+    // 步骤 2: 如果有新数据，立即发送开奖消息
     const db = new Database(env.DB);
     const latest = await db.getLatest(type);
     
-    if (!latest) {
-      return {
-        type: type,
-        name: modules.name,
-        success: true,
-        message: '暂无数据',
-        hasNewData: false,
-        predictions: []
-      };
+    if (fetchResult.hasNewData && latest) {
+      console.log(`${modules.name} 有新数据，发送开奖消息...`);
+      try {
+        const drawMessage = buildDrawMessage(modules.name, type, latest);
+        await telegram.sendMessage(drawMessage);
+        console.log(`✓ ${modules.name} 开奖消息已发送`);
+      } catch (sendError) {
+        console.error(`✗ ${modules.name} 开奖消息发送失败:`, sendError);
+      }
     }
     
-    const hasNewData = fetchResult.hasNewData;
-    const inserted = fetchResult.inserted;
-    
-    // 预测下一期（无论是否有新数据都进行预测）
+    // 步骤 3: 预测下一期
     console.log(`开始预测 ${modules.name} 下一期...`);
     
     let predictions = [];
     try {
-      // 检查数据库中的数据量
       const dataCount = await db.getCount(type);
       console.log(`${modules.name} 数据库记录数: ${dataCount}`);
       
@@ -463,18 +491,25 @@ async function processSingleLottery(type, env, config) {
     } catch (predictError) {
       console.error(`${modules.name} 预测失败:`, predictError);
       console.error(`错误堆栈:`, predictError.stack);
-      // 预测失败也继续，返回空数组
+    }
+    
+    // 步骤 4: 发送预测消息
+    if (predictions.length > 0) {
+      console.log(`${modules.name} 发送预测消息...`);
+      try {
+        const predMessage = buildPredictionMessage(modules.name, type, predictions);
+        await telegram.sendMessage(predMessage);
+        console.log(`✓ ${modules.name} 预测消息已发送`);
+      } catch (sendError) {
+        console.error(`✗ ${modules.name} 预测消息发送失败:`, sendError);
+      }
     }
     
     return {
       type: type,
       name: modules.name,
       success: true,
-      message: hasNewData ? '增量更新并预测完成' : '数据已是最新，预测完成',
-      hasNewData: hasNewData,
-      new_count: inserted,
-      latest: latest,
-      predictions: predictions
+      message: fetchResult.hasNewData ? '爬取、预测、通知完成' : '预测、通知完成'
     };
     
   } catch (error) {
@@ -483,9 +518,7 @@ async function processSingleLottery(type, env, config) {
       type: type,
       name: modules.name,
       success: false,
-      message: error.message,
-      hasNewData: false,
-      predictions: []
+      message: error.message
     };
   }
 }
@@ -518,46 +551,18 @@ async function runDailyTask(env) {
   const telegram = new TelegramBot(config.telegramBotToken, config.telegramChatId, config.telegramChannelId, config.telegramSendToBot, config.telegramSendToChannel);
   
   try {
-    // 并行处理四种彩票（提高性能）
-    const [ssqResult, dltResult, qxcResult, qlcResult] = await Promise.all([
-      processSingleLottery('ssq', env, config),
-      processSingleLottery('dlt', env, config),
-      processSingleLottery('qxc', env, config),
-      processSingleLottery('qlc', env, config)
-    ]);
+    // 串行处理四种彩票（每个彩票独立闭环：爬取 → 发送开奖 → 预测 → 发送预测）
+    console.log('开始处理双色球...');
+    const ssqResult = await processSingleLottery('ssq', env, config, telegram);
     
-    // 检查全局超时
-    if (Date.now() - taskStartTime > maxTaskTime) {
-      console.warn('任务执行超时，跳过 Telegram 通知');
-      return {
-        success: true,
-        message: '任务执行完成（超时跳过通知）',
-        results: [ssqResult, dltResult, qxcResult, qlcResult]
-      };
-    }
+    console.log('开始处理大乐透...');
+    const dltResult = await processSingleLottery('dlt', env, config, telegram);
     
-    // 发送 Telegram 通知（总是发送，包含新数据和预测）
-    const results = [ssqResult, dltResult, qxcResult, qlcResult].filter(r => r.success);
+    console.log('开始处理七星彩...');
+    const qxcResult = await processSingleLottery('qxc', env, config, telegram);
     
-    // 构建所有消息（使用新的通知消息构建函数）
-    const messages = results.map(result => {
-      // 使用 buildNotificationMessage，会根据 hasNewData 自动决定消息格式
-      // 有新数据：显示开奖数据 + 预测
-      // 无新数据：只显示预测
-      const message = buildNotificationMessage(result.name, result.type, result);
-      return { name: result.name, content: message, hasNewData: result.hasNewData };
-    });
-    
-    // 并行发送所有消息（优化：减少等待时间）
-    console.log(`\n准备发送 ${messages.length} 条 Telegram 通知...`);
-    await Promise.all(
-      messages.map(msg => {
-        const dataInfo = msg.hasNewData ? '(有新数据)' : '(仅预测)';
-        return telegram.sendMessage(msg.content)
-          .then(() => console.log(`✓ ${msg.name} ${dataInfo} Telegram 通知已发送`))
-          .catch(err => console.error(`✗ ${msg.name} Telegram 通知发送失败:`, err));
-      })
-    );
+    console.log('开始处理七乐彩...');
+    const qlcResult = await processSingleLottery('qlc', env, config, telegram);
     
     console.log('✅ 每日任务执行完成');
     
