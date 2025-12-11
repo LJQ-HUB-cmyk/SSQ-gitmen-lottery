@@ -21,6 +21,10 @@ export class QXCSpider {
       });
 
       if (!response.ok) {
+        // 发送网络错误通知
+        if (typeof handleNetworkError !== 'undefined' && globalThis.env) {
+          await handleNetworkError(globalThis.env, response.status, this.baseUrl, 'qxc');
+        }
         throw new Error(`HTTP ${response.status}`);
       }
 
@@ -44,6 +48,10 @@ export class QXCSpider {
     });
 
     if (!response.ok) {
+      // 发送网络错误通知
+      if (typeof handleNetworkError !== 'undefined' && globalThis.env) {
+        await handleNetworkError(globalThis.env, response.status, url, 'qxc');
+      }
       throw new Error(`HTTP ${response.status}`);
     }
 

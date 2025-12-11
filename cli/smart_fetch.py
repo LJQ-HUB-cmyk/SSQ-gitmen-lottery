@@ -193,7 +193,14 @@ def _fetch_incremental(spider, db, modules, lottery_type, **options) -> Dict:
 
 
 def _fetch_full_history(spider, db, modules, lottery_type, **options) -> Dict:
-    """全量爬取逻辑（按年份推进，自动查找缺失年份）"""
+    """全量爬取逻辑（按年份推进，自动查找缺失年份）
+    
+    核心逻辑（与 Worker 版本保持一致）：
+    1. 从起始年份开始，逐年爬取
+    2. 第一年使用 lastIssue + 1 作为起始期号
+    3. 其他年份从 001 开始（关键：跨年时从 001 开始，而不是从 lastIssue 的期号开始）
+    4. 如果某年无数据，跳过并继续下一年
+    """
     last_issue = modules['last_issue']
     start_year = int('20' + last_issue[:2])
     current_year = datetime.now().year
@@ -203,38 +210,44 @@ def _fetch_full_history(spider, db, modules, lottery_type, **options) -> Dict:
     total_inserted = 0
     year_count = 0
     
-    # 循环爬取所有缺失年份
-    while True:
-        # 查找数据库中缺失的年份
-        target_year = None
+    # 循环爬取所有年份（使用 for 循环避免死循环）
+    for year in range(start_year, current_year + 1):
+        year_short = str(year)[2:]
         
-        for year in range(start_year, current_year + 1):
-            year_short = str(year)[2:]
-            first_issue_of_year = f"20{year_short}001"  # 7位格式：2003001
-            
-            # 检查该年份的第一期是否存在
-            latest = db.get_latest_lottery()
-            if not latest or latest['lottery_no'] < first_issue_of_year:
-                target_year = year
-                break
+        # 确定该年份的起始期号
+        if year == start_year:
+            # 第一年：使用配置中的 last_issue + 1 作为起始期号
+            # 例如：七星彩 lastIssue='04100'，则从 04101 开始
+            start_issue_num = int(last_issue[2:]) + 1
+            start_issue = f"{year_short}{start_issue_num:03d}"
+        else:
+            # 其他年份：从 001 开始
+            # 关键：跨年时应该从下一年的起始期号开始，而不是从 lastIssue 的期号开始
+            # 例如：双色球从 03001 开始，跨年后应该从 04001 开始
+            # 例如：七星彩从 04101 开始，跨年后应该从 05001 开始（不是 05101）
+            start_issue = f"{year_short}001"
         
-        # 如果没有找到缺失的年份，说明数据已完整
-        if not target_year:
-            break
+        end_issue = f"{year_short}200"
+        
+        # 检查该年份是否已经有数据
+        latest = db.get_latest_lottery()
+        if latest:
+            latest_year = int('20' + latest['lottery_no'][2:4])
+            # 如果数据库中已有该年份或更新年份的数据，跳过
+            if latest_year >= year:
+                logger.info(f"📅 跳过 {year} 年：数据库已有该年份数据")
+                continue
         
         # 爬取目标年份的数据
         year_count += 1
-        year_short = str(target_year)[2:]
-        start_issue = f"{year_short}001"
-        end_issue = f"{year_short}200"
-        
-        logger.info(f"📅 爬取第 {year_count} 年: {target_year} 年数据 (期号: {start_issue} - {end_issue})")
+        logger.info(f"📅 爬取第 {year_count} 年: {year} 年数据 (期号: {start_issue} - {end_issue})")
         
         # 使用统一的 fetch 方法爬取该年度数据
         data = spider.fetch(start_issue=start_issue, end_issue=end_issue)
         
         if not data or len(data) == 0:
-            logger.warning(f"   ⚠️ {target_year} 年无数据，跳过")
+            logger.warning(f"   ⚠️ {year} 年无数据，跳过")
+            # 关键：跳过无数据的年份，继续下一年（避免死循环）
             continue
         
         logger.info(f"   ✅ 获取 {len(data)} 条数据")
