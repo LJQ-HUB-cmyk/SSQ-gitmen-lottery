@@ -43,6 +43,6 @@ crons = ["00 14 * * *"]
 #    - API_KEY
 
 [[routes]]
-pattern = "cp.gitman.netlib.re"
+pattern = "cp.gitman.de5.net"
 custom_domain = true
 
