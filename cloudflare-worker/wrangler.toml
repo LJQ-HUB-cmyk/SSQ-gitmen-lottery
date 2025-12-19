@@ -30,6 +30,11 @@ database_id = "01343890-8135-492e-b9c5-34b57a4532e1"
 binding = "KV_BINDING"
 id = "60a5e4f34c4e46e9aedcf7a3cb4d52ea"
 
+# R2 存储桶绑定（用于存储导出文件）
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "website-data"
+
 # Cron 触发器配置
 # 每天晚上22:00 北京时间执行（UTC 时间 14:00）
 [triggers]

@@ -277,3 +277,11 @@ MIT License
 
 **版本**：3.1.0  
 **更新日期**：2025-11-19
+
+## SQL
+查询重复号码，重复的次数:
+```sql
+SELECT red1,red2, COUNT(*) AS cnt
+FROM ssq_lottery 
+GROUP BY red1,red2
+HAVING COUNT(*) > 1 order by cnt desc;

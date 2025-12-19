@@ -12,6 +12,7 @@ import { QLCSpider } from './spiders/qlc.js';
 import { QLCPredictor } from './predictors/qlc.js';
 import { TelegramBot } from './utils/telegram.js';
 import { Database } from './utils/database.js';
+import { DataExporter } from './utils/exporter.js';
 import { handleNetworkError, handleParseError, handleCriticalError } from './utils/error-handler.js';
 
 /**
@@ -635,6 +636,12 @@ export default {
         '    参数: type = ssq | dlt | qxc | qlc\n' +
         '    示例: POST /init/ssq, POST /init/dlt, POST /init/qxc, POST /init/qlc\n' +
         '    认证: Bearer Token\n\n' +
+        '  POST /export\n' +
+        '    说明: 导出全量数据（Excel + SQL）\n' +
+        '    默认: 导出所有类型\n' +
+        '    指定: /export/ssq 或 /export/dlt 或 /export/qxc 或 /export/qlc\n' +
+        '    返回: 下载链接（上传到 R2）\n' +
+        '    认证: Bearer Token\n\n' +
         '┌─────────────────────────────────────────────────────────────────┐\n' +
         '│ 查询接口（无需认证）                                            │\n' +
         '└─────────────────────────────────────────────────────────────────┘\n' +
@@ -1079,6 +1086,38 @@ export default {
       }
     }
     
+    // 文件下载接口（从 R2 获取导出的文件）
+    if (url.pathname.startsWith('/download/')) {
+      const filePath = url.pathname.replace('/download/', '');
+      
+      try {
+        // 从 R2 获取文件
+        const object = await env.R2_BUCKET.get(filePath);
+        
+        if (!object) {
+          return new Response('File not found', { 
+            status: 404,
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+          });
+        }
+        
+        // 返回文件
+        return new Response(object.body, {
+          headers: {
+            'Content-Type': object.httpMetadata.contentType || 'application/octet-stream',
+            'Content-Disposition': `attachment; filename="${filePath.split('/').pop()}"`,
+            'Cache-Control': 'public, max-age=3600'
+          }
+        });
+      } catch (error) {
+        console.error('下载文件失败:', error);
+        return new Response(`Download failed: ${error.message}`, {
+          status: 500,
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+        });
+      }
+    }
+    
     // 测试 Telegram 连接
     if (url.pathname === '/test') {
       try {
@@ -1100,6 +1139,95 @@ export default {
         return new Response(`测试失败: ${error.message}`, {
           status: 500,
           headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+        });
+      }
+    }
+    
+    // 数据导出接口（需要认证）
+    if (url.pathname.startsWith('/export') && request.method === 'POST') {
+      // 验证授权
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader || authHeader !== `Bearer ${config.apiKey}`) {
+        return new Response('Unauthorized', { status: 401 });
+      }
+      
+      try {
+        const db = new Database(env.DB);
+        const exporter = new DataExporter(db, env.R2_BUCKET);
+        
+        // 检查是否指定了类型
+        const parts = url.pathname.split('/').filter(p => p);
+        const hasType = parts.length >= 2 && (['ssq', 'dlt', 'qxc', 'qlc'].includes(parts[1]));
+        
+        if (hasType) {
+          // 导出指定类型的数据
+          const type = parts[1];
+          const modules = getLotteryModules(type);
+          
+          console.log(`开始导出 ${modules.name} 数据...`);
+          const result = await exporter.exportLotteryData(type, modules.name);
+          
+          return new Response(JSON.stringify({
+            success: true,
+            lottery_type: type,
+            lottery_name: modules.name,
+            count: result.count,
+            timestamp: result.timestamp,
+            downloads: {
+              excel: result.excel,
+              sql: result.sql
+            }
+          }, null, 2), {
+            headers: { 'Content-Type': 'application/json; charset=utf-8' }
+          });
+        } else {
+          // 导出所有类型的数据
+          const types = ['ssq', 'dlt', 'qxc', 'qlc'];
+          const allResults = [];
+          
+          for (const type of types) {
+            const modules = getLotteryModules(type);
+            console.log(`开始导出 ${modules.name} 数据...`);
+            
+            try {
+              const result = await exporter.exportLotteryData(type, modules.name);
+              allResults.push({
+                lottery_type: type,
+                lottery_name: modules.name,
+                count: result.count,
+                timestamp: result.timestamp,
+                downloads: {
+                  excel: result.excel,
+                  sql: result.sql
+                }
+              });
+            } catch (error) {
+              console.error(`导出 ${modules.name} 失败:`, error);
+              allResults.push({
+                lottery_type: type,
+                lottery_name: modules.name,
+                success: false,
+                error: error.message
+              });
+            }
+          }
+          
+          return new Response(JSON.stringify({
+            success: true,
+            message: '批量导出完成',
+            results: allResults
+          }, null, 2), {
+            headers: { 'Content-Type': 'application/json; charset=utf-8' }
+          });
+        }
+      } catch (error) {
+        console.error('导出失败:', error);
+        return new Response(JSON.stringify({
+          success: false,
+          error: error.message
+        }, null, 2), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json; charset=utf-8' }
         });
       }
     }

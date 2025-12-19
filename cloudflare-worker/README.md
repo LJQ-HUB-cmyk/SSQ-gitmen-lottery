@@ -62,6 +62,7 @@ wrangler kv:key put --binding=KV_BINDING DEFAULT_PREDICTION_COUNT "15"
 ```
 POST /run/{type}       - 手动执行每日任务
 POST /init/{type}      - 初始化数据库
+POST /export/{type}    - 导出数据（Excel + SQL）⭐ 新功能
 GET /latest/{type}     - 查询最新数据
 GET /predict/{type}    - 获取预测结果
 GET /strategies/{type} - 查看可用策略
@@ -96,6 +97,10 @@ curl "https://your-worker.workers.dev/predict/ssq?count=10&strategies=frequency,
 
 # 查看统计
 curl https://your-worker.workers.dev/stats/ssq
+
+# 导出数据 ⭐ 新功能
+curl -X POST https://your-worker.workers.dev/export/ssq \
+  -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
 ### 大乐透
@@ -269,11 +274,54 @@ curl -X POST https://your-worker.workers.dev/init/dlt \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
+## 数据导出功能 ⭐ 新功能
+
+支持将彩票数据导出为 Excel 和 SQL 文件，自动上传到 R2 存储桶。
+
+### 使用方法
+
+```bash
+# 导出单个类型
+curl -X POST https://cp.gitman.de5.net/export/ssq \
+  -H "Authorization: Bearer YOUR_API_KEY"
+
+# 导出所有类型
+curl -X POST https://cp.gitman.de5.net/export \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### 下载文件
+
+返回的 URL 示例：
+```
+https://cp.gitman.de5.net/download/ssq/2024-12-19/ssq_lottery_2024-12-19T14-30-00.xlsx
+https://cp.gitman.de5.net/download/ssq/2024-12-19/ssq_lottery_2024-12-19T14-30-00.sql
+```
+
+### 文件组织
+
+```
+website-data/
+├── ssq/2024-12-19/ssq_lottery_2024-12-19T14-30-00.xlsx
+├── dlt/2024-12-19/dlt_lottery_2024-12-19T14-30-00.xlsx
+└── ...
+```
+
+### 文件格式
+
+- **Excel**: SpreadsheetML 格式，兼容 Excel、WPS、LibreOffice
+- **SQL**: 包含 CREATE TABLE 和 INSERT 语句，可直接导入数据库
+
+### R2 配置
+
+项目使用 R2 存储桶 `website-data`（已在 wrangler.toml 中配置），文件通过 Worker 域名访问，无需额外配置。
+
+成本：每月导出 10 次约 $0.001（几乎免费）
+
 ## 相关文档
 
 - [API 使用文档](./API_USAGE.md) - 详细的 API 说明
 - [脚本使用指南](./scripts/INIT_USAGE.md) - init.sh 使用说明
-- [部署指南](./docs/DEPLOY.md) - 部署步骤
 
 ## 技术栈
 
@@ -288,6 +336,6 @@ MIT License
 
 ---
 
-**版本**：3.0.0  
-**更新日期**：2025-11-18  
-**重大更新**：统一增量爬取逻辑
+**版本**：3.2.0  
+**更新日期**：2024-12-19  
+**最新更新**：新增数据导出功能（Excel + SQL）⭐

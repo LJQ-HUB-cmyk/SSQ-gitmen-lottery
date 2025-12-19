@@ -508,7 +508,105 @@ curl https://your-worker.workers.dev/stats/dlt    # 仅大乐透
 }
 ```
 
-### 7. 测试 Telegram 连接
+### 7. 数据导出
+
+**接口**：`POST /export/{type}`
+
+**说明**：导出全量数据为 Excel 和 SQL 文件，并上传到 R2 存储桶
+
+**参数**：
+- `{type}`：彩票类型（`ssq`、`dlt`、`qxc` 或 `qlc`），可选，不指定则导出所有类型
+
+**认证**：需要 API Key
+
+**示例**：
+```bash
+# 导出所有类型（推荐）
+curl -X POST https://your-worker.workers.dev/export \
+  -H "Authorization: Bearer YOUR_API_KEY"
+
+# 导出指定类型
+curl -X POST https://your-worker.workers.dev/export/ssq \
+  -H "Authorization: Bearer YOUR_API_KEY"
+
+curl -X POST https://your-worker.workers.dev/export/dlt \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+**响应（单个类型）**：
+```json
+{
+  "success": true,
+  "lottery_type": "ssq",
+  "lottery_name": "双色球",
+  "count": 3378,
+  "timestamp": "2024-12-19T14-30-00",
+  "downloads": {
+    "excel": "https://lottery-exports.your-domain.com/ssq_lottery_2024-12-19T14-30-00.xlsx",
+    "sql": "https://lottery-exports.your-domain.com/ssq_lottery_2024-12-19T14-30-00.sql"
+  }
+}
+```
+
+**响应（所有类型）**：
+```json
+{
+  "success": true,
+  "message": "批量导出完成",
+  "results": [
+    {
+      "lottery_type": "ssq",
+      "lottery_name": "双色球",
+      "count": 3378,
+      "timestamp": "2024-12-19T14-30-00",
+      "downloads": {
+        "excel": "https://lottery-exports.your-domain.com/ssq_lottery_2024-12-19T14-30-00.xlsx",
+        "sql": "https://lottery-exports.your-domain.com/ssq_lottery_2024-12-19T14-30-00.sql"
+      }
+    },
+    {
+      "lottery_type": "dlt",
+      "lottery_name": "大乐透",
+      "count": 2799,
+      "timestamp": "2024-12-19T14-30-00",
+      "downloads": {
+        "excel": "https://lottery-exports.your-domain.com/dlt_lottery_2024-12-19T14-30-00.xlsx",
+        "sql": "https://lottery-exports.your-domain.com/dlt_lottery_2024-12-19T14-30-00.sql"
+      }
+    },
+    {
+      "lottery_type": "qxc",
+      "lottery_name": "七星彩",
+      "count": 2156,
+      "timestamp": "2024-12-19T14-30-00",
+      "downloads": {
+        "excel": "https://lottery-exports.your-domain.com/qxc_lottery_2024-12-19T14-30-00.xlsx",
+        "sql": "https://lottery-exports.your-domain.com/qxc_lottery_2024-12-19T14-30-00.sql"
+      }
+    },
+    {
+      "lottery_type": "qlc",
+      "lottery_name": "七乐彩",
+      "count": 2345,
+      "timestamp": "2024-12-19T14-30-00",
+      "downloads": {
+        "excel": "https://lottery-exports.your-domain.com/qlc_lottery_2024-12-19T14-30-00.xlsx",
+        "sql": "https://lottery-exports.your-domain.com/qlc_lottery_2024-12-19T14-30-00.sql"
+      }
+    }
+  ]
+}
+```
+
+**文件格式说明**：
+- **Excel 文件**：使用 SpreadsheetML 格式（.xlsx），可用 Excel、WPS、LibreOffice 打开
+- **SQL 文件**：包含 CREATE TABLE 和 INSERT 语句，可直接导入数据库
+
+**配置要求**：
+- 需要配置 R2 存储桶（参见 [R2_SETUP.md](./R2_SETUP.md)）
+- 需要配置公开访问或自定义域名以生成下载链接
+
+### 8. 测试 Telegram 连接
 
 **接口**：`GET /test`
 
@@ -587,11 +685,28 @@ curl https://your-worker.workers.dev/stats/ssq
 curl https://your-worker.workers.dev/stats/dlt
 ```
 
+### 场景5：数据导出
+
+```bash
+# 导出所有彩票类型的数据
+curl -X POST https://your-worker.workers.dev/export \
+  -H "Authorization: Bearer YOUR_API_KEY"
+
+# 导出指定类型
+curl -X POST https://your-worker.workers.dev/export/ssq \
+  -H "Authorization: Bearer YOUR_API_KEY"
+
+# 下载导出的文件
+wget https://lottery-exports.your-domain.com/ssq_lottery_2024-12-19T14-30-00.xlsx
+wget https://lottery-exports.your-domain.com/ssq_lottery_2024-12-19T14-30-00.sql
+```
+
 ## 🔐 认证
 
 需要认证的接口：
 - `POST /init/{type}`
-- `POST /run/{type}`
+- `POST /run`
+- `POST /export/{type}`
 
 认证方式：
 ```bash
@@ -633,6 +748,7 @@ wrangler kv:key put --binding=KV_BINDING TELEGRAM_CHAT_ID "your-chat-id"
 3. **认证**：POST 接口需要 API Key
 4. **兼容性**：旧接口默认使用双色球
 5. **定时任务**：通过 Cloudflare Dashboard 配置
+6. **数据导出**：需要先配置 R2 存储桶（参见 [R2_SETUP.md](./R2_SETUP.md)）
 
 ## 🐛 故障排查
 
@@ -677,6 +793,6 @@ curl -X POST https://your-worker.workers.dev/init/dlt \
 
 ---
 
-**版本**：3.0.0  
-**更新日期**：2025-11-18  
-**重大更新**：统一增量爬取逻辑
+**版本**：3.1.0  
+**更新日期**：2024-12-19  
+**重大更新**：新增数据导出功能（Excel + SQL）

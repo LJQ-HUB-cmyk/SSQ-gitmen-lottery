@@ -214,29 +214,48 @@ def _fetch_full_history(spider, db, modules, lottery_type, **options) -> Dict:
     for year in range(start_year, current_year + 1):
         year_short = str(year)[2:]
         
+        # 检查数据库最新期号
+        latest = db.get_latest_lottery()
+        
         # 确定该年份的起始期号
-        if year == start_year:
-            # 第一年：使用配置中的 last_issue + 1 作为起始期号
-            # 例如：七星彩 lastIssue='04100'，则从 04101 开始
-            start_issue_num = int(last_issue[2:]) + 1
-            start_issue = f"{year_short}{start_issue_num:03d}"
+        if latest:
+            latest_no = latest['lottery_no']
+            latest_year = int('20' + latest_no[2:4])
+            latest_issue = int(latest_no[4:])
+            
+            if latest_year > year:
+                # 数据库已有更新年份的数据，跳过当前年份
+                logger.info(f"📅 跳过 {year} 年：数据库已有更新年份数据")
+                continue
+            elif latest_year == year:
+                # 数据库已有当前年份的数据，从最新期号的下一期开始
+                next_issue = latest_issue + 1
+                if next_issue > 200:
+                    # 当前年份已爬取完毕，跳过
+                    logger.info(f"📅 跳过 {year} 年：数据库已有完整数据（最新期号: {latest_no}）")
+                    continue
+                start_issue = f"{year_short}{next_issue:03d}"
+                logger.info(f"📅 继续爬取 {year} 年：从期号 {start_issue} 开始（数据库最新: {latest_no}）")
+            else:
+                # 数据库最新年份小于当前年份，从该年份第一期开始
+                if year == start_year:
+                    # 第一年：使用配置中的 last_issue + 1 作为起始期号
+                    start_issue_num = int(last_issue[2:]) + 1
+                    start_issue = f"{year_short}{start_issue_num:03d}"
+                else:
+                    # 其他年份：从 001 开始
+                    start_issue = f"{year_short}001"
         else:
-            # 其他年份：从 001 开始
-            # 关键：跨年时应该从下一年的起始期号开始，而不是从 lastIssue 的期号开始
-            # 例如：双色球从 03001 开始，跨年后应该从 04001 开始
-            # 例如：七星彩从 04101 开始，跨年后应该从 05001 开始（不是 05101）
-            start_issue = f"{year_short}001"
+            # 数据库为空
+            if year == start_year:
+                # 第一年：使用配置中的 last_issue + 1 作为起始期号
+                start_issue_num = int(last_issue[2:]) + 1
+                start_issue = f"{year_short}{start_issue_num:03d}"
+            else:
+                # 其他年份：从 001 开始
+                start_issue = f"{year_short}001"
         
         end_issue = f"{year_short}200"
-        
-        # 检查该年份是否已经有数据
-        latest = db.get_latest_lottery()
-        if latest:
-            latest_year = int('20' + latest['lottery_no'][2:4])
-            # 如果数据库中已有该年份或更新年份的数据，跳过
-            if latest_year >= year:
-                logger.info(f"📅 跳过 {year} 年：数据库已有该年份数据")
-                continue
         
         # 爬取目标年份的数据
         year_count += 1
