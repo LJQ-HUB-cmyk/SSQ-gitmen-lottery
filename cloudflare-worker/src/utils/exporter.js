@@ -55,7 +55,9 @@ export class DataExporter {
    * 获取指定类型的全量数据
    */
   async getAllData(type) {
-    const results = await this.db
+    // 使用 Database 类的 getAll 方法，但需要获取所有数据
+    // 由于 getAll 有 limit 参数，我们需要直接访问底层数据库
+    const results = await this.db.db
       .prepare(`SELECT * FROM ${type}_lottery ORDER BY lottery_no ASC`)
       .all();
     
