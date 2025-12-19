@@ -147,7 +147,7 @@ DAILY_REQUEST_LIMIT=500
 AUTO_CONTINUE=false
 ```
 
-详见：[scripts/INIT_USAGE.md](./scripts/INIT_USAGE.md)
+详见脚本内注释
 
 ## 定时任务
 
@@ -330,8 +330,8 @@ website-data/
 
 ## 相关文档
 
-- [API 使用文档](./API_USAGE.md) - 详细的 API 说明
-- [脚本使用指南](./scripts/INIT_USAGE.md) - init.sh 使用说明
+- 详细 API 说明见上文"API 接口"章节
+- init.sh 使用说明见脚本内注释
 
 ## 技术栈
 

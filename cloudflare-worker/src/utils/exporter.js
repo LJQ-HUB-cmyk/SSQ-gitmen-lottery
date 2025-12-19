@@ -31,16 +31,16 @@ export class DataExporter {
     const sqlFileName = `${type}/${type}_latest.sql`;
     const sqliteFileName = `${type}/${type}_latest.sqlite.sql`;
     
-    // 生成 CSV 文件（Excel 可以直接打开）
-    const csvContent = this.generateCSV(type, data, lotteryName);
+    // 生成 CSV 文件（Excel 可以直接打开）- 包含所有字段
+    const csvContent = await this.generateCSV(type, data, lotteryName);
     const csvUrl = await this.uploadToR2(csvFileName, csvContent, 'text/csv; charset=utf-8');
     
-    // 生成 SQL 文件（MySQL 格式）
-    const sqlContent = this.generateSQL(type, data, lotteryName, 'mysql');
+    // 生成 SQL 文件（MySQL 格式）- 不包含 id
+    const sqlContent = await this.generateSQL(type, data, lotteryName, 'mysql');
     const sqlUrl = await this.uploadToR2(sqlFileName, sqlContent, 'text/plain');
     
-    // 生成 SQLite 格式的 SQL 文件
-    const sqliteContent = this.generateSQL(type, data, lotteryName, 'sqlite');
+    // 生成 SQLite 格式的 SQL 文件 - 不包含 id
+    const sqliteContent = await this.generateSQL(type, data, lotteryName, 'sqlite');
     const sqliteUrl = await this.uploadToR2(sqliteFileName, sqliteContent, 'text/plain');
     
     console.log(`✅ ${lotteryName} 数据导出完成`);
@@ -67,119 +67,102 @@ export class DataExporter {
   }
 
   /**
-   * 生成 CSV 文件（Excel 可以直接打开）
+   * 获取表的所有列名（动态获取 schema）
    */
-  generateCSV(type, data, lotteryName) {
+  async getTableColumns(type) {
+    const tableName = `${type}_lottery`;
+    
+    // 从第一行数据获取所有列名
+    const result = await this.db.db
+      .prepare(`SELECT * FROM ${tableName} LIMIT 1`)
+      .first();
+    
+    if (!result) {
+      // 如果没有数据，从 schema 获取
+      const schema = await this.db.db
+        .prepare(`PRAGMA table_info(${tableName})`)
+        .all();
+      
+      return schema.results.map(col => col.name);
+    }
+    
+    return Object.keys(result);
+  }
+
+  /**
+   * 生成 CSV 文件（Excel 可以直接打开）- 动态导出所有字段
+   */
+  async generateCSV(type, data, lotteryName) {
+    if (!data || data.length === 0) {
+      return '\uFEFF'; // 空文件
+    }
+    
     // 添加 BOM 以支持中文
     let csv = '\uFEFF';
     
-    // 表头
-    if (type === 'ssq') {
-      csv += '期号,开奖日期,红球1,红球2,红球3,红球4,红球5,红球6,蓝球\n';
-      for (const row of data) {
-        csv += `${row.lottery_no},${row.draw_date},${row.red1},${row.red2},${row.red3},${row.red4},${row.red5},${row.red6},${row.blue}\n`;
-      }
-    } else if (type === 'dlt') {
-      csv += '期号,开奖日期,前区1,前区2,前区3,前区4,前区5,后区1,后区2\n';
-      for (const row of data) {
-        csv += `${row.lottery_no},${row.draw_date},${row.front1},${row.front2},${row.front3},${row.front4},${row.front5},${row.back1},${row.back2}\n`;
-      }
-    } else if (type === 'qxc') {
-      csv += '期号,开奖日期,号码1,号码2,号码3,号码4,号码5,号码6,号码7\n';
-      for (const row of data) {
-        csv += `${row.lottery_no},${row.draw_date},${row.num1},${row.num2},${row.num3},${row.num4},${row.num5},${row.num6},${row.num7}\n`;
-      }
-    } else if (type === 'qlc') {
-      csv += '期号,开奖日期,基本号1,基本号2,基本号3,基本号4,基本号5,基本号6,基本号7,特别号\n';
-      for (const row of data) {
-        csv += `${row.lottery_no},${row.draw_date},${row.basic1},${row.basic2},${row.basic3},${row.basic4},${row.basic5},${row.basic6},${row.basic7},${row.special}\n`;
-      }
+    // 动态获取所有列名（从第一行数据）
+    const columns = Object.keys(data[0]);
+    
+    // 写入表头（使用列名）
+    csv += columns.join(',') + '\n';
+    
+    // 写入数据行
+    for (const row of data) {
+      const values = columns.map(col => {
+        const value = row[col];
+        // 处理可能包含逗号的字段，用引号包裹
+        if (value === null || value === undefined) {
+          return '';
+        }
+        const strValue = String(value);
+        if (strValue.includes(',') || strValue.includes('"') || strValue.includes('\n')) {
+          return `"${strValue.replace(/"/g, '""')}"`;
+        }
+        return strValue;
+      });
+      csv += values.join(',') + '\n';
     }
     
     return csv;
   }
 
   /**
-   * 生成 SQL 文件（支持 MySQL 和 SQLite）
+   * 生成 SQL 文件（支持 MySQL 和 SQLite）- 动态生成，不包含 id
    */
-  generateSQL(type, data, lotteryName, format = 'mysql') {
+  async generateSQL(type, data, lotteryName, format = 'mysql') {
+    if (!data || data.length === 0) {
+      return `-- ${lotteryName} 数据导出\n-- 无数据\n`;
+    }
+    
     const isSQLite = format === 'sqlite';
     const insertCmd = isSQLite ? 'INSERT OR IGNORE' : 'INSERT IGNORE';
+    const tableName = `${type}_lottery`;
     
     let sql = `-- ${lotteryName} 数据导出\n`;
     sql += `-- 导出时间: ${new Date().toISOString()}\n`;
     sql += `-- 数据条数: ${data.length}\n`;
     sql += `-- 数据库格式: ${format.toUpperCase()}\n\n`;
     
-    // 根据彩票类型生成对应的表结构和数据
-    const tableConfigs = {
-      ssq: {
-        tableName: 'ssq_lottery',
-        columns: isSQLite 
-          ? ['lottery_no TEXT', 'draw_date TEXT', 'red1 TEXT', 'red2 TEXT', 'red3 TEXT', 'red4 TEXT', 'red5 TEXT', 'red6 TEXT', 'blue TEXT', 'sorted_code TEXT']
-          : ['lottery_no VARCHAR(20)', 'draw_date DATE', 'red1 VARCHAR(2)', 'red2 VARCHAR(2)', 'red3 VARCHAR(2)', 'red4 VARCHAR(2)', 'red5 VARCHAR(2)', 'red6 VARCHAR(2)', 'blue VARCHAR(2)', 'sorted_code VARCHAR(50)'],
-        fields: ['lottery_no', 'draw_date', 'red1', 'red2', 'red3', 'red4', 'red5', 'red6', 'blue', 'sorted_code']
-      },
-      dlt: {
-        tableName: 'dlt_lottery',
-        columns: isSQLite
-          ? ['lottery_no TEXT', 'draw_date TEXT', 'front1 TEXT', 'front2 TEXT', 'front3 TEXT', 'front4 TEXT', 'front5 TEXT', 'back1 TEXT', 'back2 TEXT', 'sorted_code TEXT']
-          : ['lottery_no VARCHAR(20)', 'draw_date DATE', 'front1 VARCHAR(2)', 'front2 VARCHAR(2)', 'front3 VARCHAR(2)', 'front4 VARCHAR(2)', 'front5 VARCHAR(2)', 'back1 VARCHAR(2)', 'back2 VARCHAR(2)', 'sorted_code VARCHAR(50)'],
-        fields: ['lottery_no', 'draw_date', 'front1', 'front2', 'front3', 'front4', 'front5', 'back1', 'back2', 'sorted_code']
-      },
-      qxc: {
-        tableName: 'qxc_lottery',
-        columns: isSQLite
-          ? ['lottery_no TEXT', 'draw_date TEXT', 'num1 TEXT', 'num2 TEXT', 'num3 TEXT', 'num4 TEXT', 'num5 TEXT', 'num6 TEXT', 'num7 TEXT', 'sorted_code TEXT']
-          : ['lottery_no VARCHAR(20)', 'draw_date DATE', 'num1 VARCHAR(2)', 'num2 VARCHAR(2)', 'num3 VARCHAR(2)', 'num4 VARCHAR(2)', 'num5 VARCHAR(2)', 'num6 VARCHAR(2)', 'num7 VARCHAR(2)', 'sorted_code VARCHAR(50)'],
-        fields: ['lottery_no', 'draw_date', 'num1', 'num2', 'num3', 'num4', 'num5', 'num6', 'num7', 'sorted_code']
-      },
-      qlc: {
-        tableName: 'qlc_lottery',
-        columns: isSQLite
-          ? ['lottery_no TEXT', 'draw_date TEXT', 'basic1 TEXT', 'basic2 TEXT', 'basic3 TEXT', 'basic4 TEXT', 'basic5 TEXT', 'basic6 TEXT', 'basic7 TEXT', 'special TEXT', 'sorted_code TEXT']
-          : ['lottery_no VARCHAR(20)', 'draw_date DATE', 'basic1 VARCHAR(2)', 'basic2 VARCHAR(2)', 'basic3 VARCHAR(2)', 'basic4 VARCHAR(2)', 'basic5 VARCHAR(2)', 'basic6 VARCHAR(2)', 'basic7 VARCHAR(2)', 'special VARCHAR(2)', 'sorted_code VARCHAR(50)'],
-        fields: ['lottery_no', 'draw_date', 'basic1', 'basic2', 'basic3', 'basic4', 'basic5', 'basic6', 'basic7', 'special', 'sorted_code']
-      }
-    };
+    // 动态获取所有列名（排除 id）
+    const allColumns = Object.keys(data[0]);
+    const dataColumns = allColumns.filter(col => col !== 'id');
     
-    const config = tableConfigs[type];
-    if (!config) {
-      throw new Error(`不支持的彩票类型: ${type}`);
-    }
-    
-    // 生成 CREATE TABLE 语句
+    // 生成 CREATE TABLE 语句（简化版，只包含基本结构）
     sql += `-- ${lotteryName}数据表\n`;
-    sql += `CREATE TABLE IF NOT EXISTS ${config.tableName} (\n`;
+    sql += `-- 注意：此脚本仅包含 INSERT 语句，假设表结构已存在\n`;
+    sql += `-- 如需完整表结构，请参考 schema.sql\n\n`;
     
-    if (isSQLite) {
-      sql += `  id INTEGER PRIMARY KEY AUTOINCREMENT,\n`;
-    } else {
-      sql += `  id INT AUTO_INCREMENT PRIMARY KEY,\n`;
-    }
-    
-    sql += `  ${config.columns.map(col => col + ' NOT NULL').join(',\n  ')},\n`;
-    
-    if (isSQLite) {
-      sql += `  created_at TEXT DEFAULT (datetime('now')),\n`;
-      sql += `  updated_at TEXT DEFAULT (datetime('now')),\n`;
-      sql += `  UNIQUE(lottery_no)\n`;
-      sql += `);\n\n`;
-    } else {
-      sql += `  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n`;
-      sql += `  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n`;
-      sql += `  UNIQUE KEY unique_lottery_no (lottery_no)\n`;
-      sql += `) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n\n`;
-    }
-    
-    // 生成 INSERT 语句
+    // 生成 INSERT 语句（不包含 id，让数据库自动生成）
     for (const row of data) {
-      const values = config.fields.map(field => {
+      const values = dataColumns.map(field => {
         const value = row[field];
+        if (value === null || value === undefined) {
+          return 'NULL';
+        }
         return `'${this.escapeSql(value)}'`;
       }).join(', ');
       
-      sql += `${insertCmd} INTO ${config.tableName} (${config.fields.join(', ')}) VALUES (${values});\n`;
+      sql += `${insertCmd} INTO ${tableName} (${dataColumns.join(', ')}) VALUES (${values});\n`;
     }
     
     return sql;
