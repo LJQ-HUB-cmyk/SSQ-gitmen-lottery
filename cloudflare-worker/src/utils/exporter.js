@@ -233,10 +233,21 @@ export class DataExporter {
     sql = sql.slice(0, -2) + '\n';
     sql += `);\n`;
     
-    // 添加索引
-    sql += `\nCREATE INDEX IF NOT EXISTS idx_${type}_lottery_no ON ${tableName}(lottery_no);\n`;
-    sql += `CREATE INDEX IF NOT EXISTS idx_${type}_draw_date ON ${tableName}(draw_date);\n`;
-    sql += `CREATE INDEX IF NOT EXISTS idx_${type}_sorted_code ON ${tableName}(sorted_code);\n`;
+    // 添加索引（根据数据库类型使用不同语法）
+    if (isSQLite) {
+      // SQLite 支持 IF NOT EXISTS
+      sql += `\nCREATE INDEX IF NOT EXISTS idx_${type}_lottery_no ON ${tableName}(lottery_no);\n`;
+      sql += `CREATE INDEX IF NOT EXISTS idx_${type}_draw_date ON ${tableName}(draw_date);\n`;
+      sql += `CREATE INDEX IF NOT EXISTS idx_${type}_sorted_code ON ${tableName}(sorted_code);\n`;
+    } else {
+      // MySQL 不支持 IF NOT EXISTS，使用 DROP + CREATE
+      sql += `\nDROP INDEX IF EXISTS idx_${type}_lottery_no ON ${tableName};\n`;
+      sql += `CREATE INDEX idx_${type}_lottery_no ON ${tableName}(lottery_no);\n`;
+      sql += `DROP INDEX IF EXISTS idx_${type}_draw_date ON ${tableName};\n`;
+      sql += `CREATE INDEX idx_${type}_draw_date ON ${tableName}(draw_date);\n`;
+      sql += `DROP INDEX IF EXISTS idx_${type}_sorted_code ON ${tableName};\n`;
+      sql += `CREATE INDEX idx_${type}_sorted_code ON ${tableName}(sorted_code);\n`;
+    }
     
     return sql;
   }
