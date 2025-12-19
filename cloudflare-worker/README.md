@@ -276,7 +276,7 @@ curl -X POST https://your-worker.workers.dev/init/dlt \
 
 ## 数据导出功能 ⭐ 新功能
 
-支持将彩票数据导出为 Excel 和 SQL 文件，自动上传到 R2 存储桶。
+支持将彩票数据导出为 CSV、MySQL SQL 和 SQLite SQL 文件，自动上传到 R2 存储桶。
 
 ### 使用方法
 
@@ -294,23 +294,25 @@ curl -X POST https://cp.gitman.de5.net/export \
 
 返回的 URL 示例：
 ```
-https://cp.gitman.de5.net/download/ssq/2024-12-19/ssq_lottery_2024-12-19T14-30-00.xlsx
-https://cp.gitman.de5.net/download/ssq/2024-12-19/ssq_lottery_2024-12-19T14-30-00.sql
+https://cp.gitman.de5.net/download/ssq/2024-12-19/ssq_lottery_2024-12-19T14-30-00.csv
+https://cp.gitman.de5.net/download/ssq/2024-12-19/ssq_lottery_2024-12-19T14-30-00.sql (MySQL)
+https://cp.gitman.de5.net/download/ssq/2024-12-19/ssq_lottery_2024-12-19T14-30-00.sqlite.sql (SQLite)
 ```
 
 ### 文件组织
 
 ```
 website-data/
-├── ssq/2024-12-19/ssq_lottery_2024-12-19T14-30-00.xlsx
-├── dlt/2024-12-19/dlt_lottery_2024-12-19T14-30-00.xlsx
+├── ssq/2024-12-19/ssq_lottery_2024-12-19T14-30-00.csv
+├── dlt/2024-12-19/dlt_lottery_2024-12-19T14-30-00.csv
 └── ...
 ```
 
 ### 文件格式
 
-- **Excel**: SpreadsheetML 格式，兼容 Excel、WPS、LibreOffice
-- **SQL**: 包含 CREATE TABLE 和 INSERT 语句，可直接导入数据库
+- **CSV**: UTF-8 编码，Excel 可直接打开，支持中文
+- **SQL (MySQL)**: MySQL/MariaDB 格式，包含 CREATE TABLE 和 INSERT IGNORE 语句
+- **SQL (SQLite)**: SQLite 格式，包含 CREATE TABLE 和 INSERT OR IGNORE 语句
 
 ### R2 配置
 

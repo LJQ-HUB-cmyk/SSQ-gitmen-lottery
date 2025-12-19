@@ -1174,8 +1174,9 @@ export default {
             count: result.count,
             timestamp: result.timestamp,
             downloads: {
-              excel: result.excel,
-              sql: result.sql
+              csv: result.csv,
+              sql: result.sql,
+              sqlite: result.sqlite
             }
           }, null, 2), {
             headers: { 'Content-Type': 'application/json; charset=utf-8' }
@@ -1197,8 +1198,9 @@ export default {
                 count: result.count,
                 timestamp: result.timestamp,
                 downloads: {
-                  excel: result.excel,
-                  sql: result.sql
+                  csv: result.csv,
+                  sql: result.sql,
+                  sqlite: result.sqlite
                 }
               });
             } catch (error) {
