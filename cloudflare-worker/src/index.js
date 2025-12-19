@@ -1172,7 +1172,7 @@ export default {
             lottery_type: type,
             lottery_name: modules.name,
             count: result.count,
-            timestamp: result.timestamp,
+            exportTime: result.exportTime,
             downloads: {
               csv: result.csv,
               sql: result.sql,
@@ -1196,7 +1196,7 @@ export default {
                 lottery_type: type,
                 lottery_name: modules.name,
                 count: result.count,
-                timestamp: result.timestamp,
+                exportTime: result.exportTime,
                 downloads: {
                   csv: result.csv,
                   sql: result.sql,

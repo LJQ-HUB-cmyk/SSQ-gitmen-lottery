@@ -26,13 +26,10 @@ export class DataExporter {
     
     console.log(`获取到 ${data.length} 条数据`);
     
-    // 生成文件路径：彩票类型/日期/文件名
-    const now = new Date();
-    const date = now.toISOString().substring(0, 10); // YYYY-MM-DD
-    const timestamp = now.toISOString().replace(/[:.]/g, '-').substring(0, 19);
-    const csvFileName = `${type}/${date}/${type}_lottery_${timestamp}.csv`;
-    const sqlFileName = `${type}/${date}/${type}_lottery_${timestamp}.sql`;
-    const sqliteFileName = `${type}/${date}/${type}_lottery_${timestamp}.sqlite.sql`;
+    // 使用固定文件名，每次覆盖（保持最新）
+    const csvFileName = `${type}/${type}_latest.csv`;
+    const sqlFileName = `${type}/${type}_latest.sql`;
+    const sqliteFileName = `${type}/${type}_latest.sqlite.sql`;
     
     // 生成 CSV 文件（Excel 可以直接打开）
     const csvContent = this.generateCSV(type, data, lotteryName);
@@ -53,7 +50,7 @@ export class DataExporter {
       sql: sqlUrl,
       sqlite: sqliteUrl,
       count: data.length,
-      timestamp: timestamp
+      exportTime: new Date().toISOString()
     };
   }
 

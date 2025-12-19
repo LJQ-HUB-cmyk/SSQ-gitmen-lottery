@@ -292,21 +292,29 @@ curl -X POST https://cp.gitman.de5.net/export \
 
 ### 下载文件
 
-返回的 URL 示例：
+返回的 URL 示例（固定链接，每次导出覆盖）：
 ```
-https://cp.gitman.de5.net/download/ssq/2024-12-19/ssq_lottery_2024-12-19T14-30-00.csv
-https://cp.gitman.de5.net/download/ssq/2024-12-19/ssq_lottery_2024-12-19T14-30-00.sql (MySQL)
-https://cp.gitman.de5.net/download/ssq/2024-12-19/ssq_lottery_2024-12-19T14-30-00.sqlite.sql (SQLite)
+https://cp.gitman.de5.net/download/ssq/ssq_latest.csv
+https://cp.gitman.de5.net/download/ssq/ssq_latest.sql (MySQL)
+https://cp.gitman.de5.net/download/ssq/ssq_latest.sqlite.sql (SQLite)
 ```
 
-### 文件组织
+### 文件组织（固定文件名，自动覆盖）
 
 ```
 website-data/
-├── ssq/2024-12-19/ssq_lottery_2024-12-19T14-30-00.csv
-├── dlt/2024-12-19/dlt_lottery_2024-12-19T14-30-00.csv
+├── ssq/
+│   ├── ssq_latest.csv
+│   ├── ssq_latest.sql
+│   └── ssq_latest.sqlite.sql
+├── dlt/
+│   ├── dlt_latest.csv
+│   ├── dlt_latest.sql
+│   └── dlt_latest.sqlite.sql
 └── ...
 ```
+
+每次导出会覆盖原文件，保持最新数据，不会累积旧文件。
 
 ### 文件格式
 
