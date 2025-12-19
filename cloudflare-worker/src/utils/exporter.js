@@ -240,12 +240,9 @@ export class DataExporter {
       sql += `CREATE INDEX IF NOT EXISTS idx_${type}_draw_date ON ${tableName}(draw_date);\n`;
       sql += `CREATE INDEX IF NOT EXISTS idx_${type}_sorted_code ON ${tableName}(sorted_code);\n`;
     } else {
-      // MySQL 不支持 IF NOT EXISTS，使用 DROP + CREATE
-      sql += `\nDROP INDEX IF EXISTS idx_${type}_lottery_no ON ${tableName};\n`;
-      sql += `CREATE INDEX idx_${type}_lottery_no ON ${tableName}(lottery_no);\n`;
-      sql += `DROP INDEX IF EXISTS idx_${type}_draw_date ON ${tableName};\n`;
+      // MySQL: 表已经 DROP 了，索引也删除了，直接 CREATE 即可
+      sql += `\nCREATE INDEX idx_${type}_lottery_no ON ${tableName}(lottery_no);\n`;
       sql += `CREATE INDEX idx_${type}_draw_date ON ${tableName}(draw_date);\n`;
-      sql += `DROP INDEX IF EXISTS idx_${type}_sorted_code ON ${tableName};\n`;
       sql += `CREATE INDEX idx_${type}_sorted_code ON ${tableName}(sorted_code);\n`;
     }
     
