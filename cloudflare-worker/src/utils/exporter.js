@@ -135,7 +135,7 @@ export class DataExporter {
     }
     
     const isSQLite = format === 'sqlite';
-    const insertCmd = isSQLite ? 'INSERT OR IGNORE' : 'INSERT IGNORE';
+    const insertCmd = isSQLite ? 'INSERT' : 'INSERT';
     const tableName = `${type}_lottery`;
     
     let sql = `-- ${lotteryName} 数据导出\n`;
@@ -147,12 +147,17 @@ export class DataExporter {
     const allColumns = Object.keys(data[0]);
     const dataColumns = allColumns.filter(col => col !== 'id');
     
-    // 生成 CREATE TABLE 语句（简化版，只包含基本结构）
-    sql += `-- ${lotteryName}数据表\n`;
-    sql += `-- 注意：此脚本仅包含 INSERT 语句，假设表结构已存在\n`;
-    sql += `-- 如需完整表结构，请参考 schema.sql\n\n`;
+    // 删除旧表并重新创建
+    sql += `-- 删除旧表（如果存在）\n`;
+    sql += `DROP TABLE IF EXISTS ${tableName};\n\n`;
+    
+    // 生成 CREATE TABLE 语句
+    sql += `-- 创建 ${lotteryName} 数据表\n`;
+    sql += this.generateCreateTable(type, dataColumns, format);
+    sql += `\n`;
     
     // 生成 INSERT 语句（不包含 id，让数据库自动生成）
+    sql += `-- 插入数据\n`;
     for (const row of data) {
       const values = dataColumns.map(field => {
         const value = row[field];
@@ -164,6 +169,74 @@ export class DataExporter {
       
       sql += `${insertCmd} INTO ${tableName} (${dataColumns.join(', ')}) VALUES (${values});\n`;
     }
+    
+    return sql;
+  }
+
+  /**
+   * 动态生成 CREATE TABLE 语句
+   */
+  generateCreateTable(type, columns, format = 'mysql') {
+    const isSQLite = format === 'sqlite';
+    const tableName = `${type}_lottery`;
+    
+    let sql = `CREATE TABLE IF NOT EXISTS ${tableName} (\n`;
+    
+    // id 字段（自增主键）
+    if (isSQLite) {
+      sql += `    id INTEGER PRIMARY KEY AUTOINCREMENT,\n`;
+    } else {
+      sql += `    id INT AUTO_INCREMENT PRIMARY KEY,\n`;
+    }
+    
+    // 动态添加其他字段
+    for (const col of columns) {
+      // 根据字段名推断类型
+      let colType = 'TEXT';
+      let constraints = '';
+      
+      if (!isSQLite) {
+        // MySQL 类型
+        if (col === 'lottery_no') {
+          colType = 'VARCHAR(20)';
+          constraints = ' UNIQUE NOT NULL';
+        } else if (col === 'draw_date') {
+          colType = 'VARCHAR(20)';
+          constraints = ' NOT NULL';
+        } else if (col === 'sorted_code') {
+          colType = 'VARCHAR(100)';
+          constraints = ' NOT NULL';
+        } else if (col.includes('created_at') || col.includes('updated_at')) {
+          colType = 'DATETIME';
+          constraints = col.includes('created_at') ? ' DEFAULT CURRENT_TIMESTAMP' : ' DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP';
+        } else {
+          colType = 'VARCHAR(10)';
+          constraints = ' NOT NULL';
+        }
+      } else {
+        // SQLite 类型
+        if (col === 'lottery_no') {
+          constraints = ' UNIQUE NOT NULL';
+        } else if (col === 'draw_date' || col === 'sorted_code') {
+          constraints = ' NOT NULL';
+        } else if (col.includes('created_at') || col.includes('updated_at')) {
+          constraints = " DEFAULT (datetime('now'))";
+        } else {
+          constraints = ' NOT NULL';
+        }
+      }
+      
+      sql += `    ${col} ${colType}${constraints},\n`;
+    }
+    
+    // 移除最后的逗号
+    sql = sql.slice(0, -2) + '\n';
+    sql += `);\n`;
+    
+    // 添加索引
+    sql += `\nCREATE INDEX IF NOT EXISTS idx_${type}_lottery_no ON ${tableName}(lottery_no);\n`;
+    sql += `CREATE INDEX IF NOT EXISTS idx_${type}_draw_date ON ${tableName}(draw_date);\n`;
+    sql += `CREATE INDEX IF NOT EXISTS idx_${type}_sorted_code ON ${tableName}(sorted_code);\n`;
     
     return sql;
   }
