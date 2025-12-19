@@ -16,6 +16,7 @@ setup_global_exception_handler()
 
 from core.config import SUPPORTED_LOTTERIES, LOTTERY_NAMES
 from cli import fetch, predict, schedule
+from cli.export import export_lottery, export_all_lotteries
 
 
 def main():
@@ -29,6 +30,7 @@ def main():
   python lottery.py fetch --mode full         # 爬取所有类型的全量数据
   python lottery.py fetch --mode latest       # 爬取所有类型的最新数据
   python lottery.py predict                   # 预测所有类型
+  python lottery.py export                    # 导出所有类型的数据
   python lottery.py schedule                  # 启动定时任务（所有类型）
   
   # 处理指定彩票类型（带参数）
@@ -40,6 +42,8 @@ def main():
   python lottery.py predict dlt               # 仅预测大乐透
   python lottery.py predict qxc               # 仅预测七星彩
   python lottery.py predict qlc               # 仅预测七乐彩
+  python lottery.py export ssq                # 仅导出双色球数据
+  python lottery.py export dlt                # 仅导出大乐透数据
 
 支持的彩票类型:
   ssq  - 双色球
@@ -75,6 +79,15 @@ def main():
         help='彩票类型（可选，不指定则处理所有类型）'
     )
     
+    # export 命令
+    export_parser = subparsers.add_parser('export', help='导出数据（CSV + SQL）')
+    export_parser.add_argument(
+        'lottery',
+        nargs='?',
+        choices=SUPPORTED_LOTTERIES,
+        help='彩票类型（可选，不指定则处理所有类型）'
+    )
+    
     # schedule 命令（不需要指定彩票类型，自动处理所有类型）
     schedule_parser = subparsers.add_parser('schedule', help='定时任务（自动处理所有彩票类型）')
     
@@ -99,6 +112,30 @@ def main():
         lotteries = [args.lottery] if args.lottery else ['ssq', 'dlt', 'qxc', 'qlc']
         for lottery in lotteries:
             predict.predict(lottery)
+    
+    elif args.command == 'export':
+        # 如果没有指定彩票类型，处理所有类型
+        if args.lottery:
+            result = export_lottery(args.lottery)
+            if result:
+                print(f"\n✅ {LOTTERY_NAMES[args.lottery]} 数据导出完成")
+                print(f"  数据条数: {result['count']}")
+                print(f"  CSV: {result['csv']}")
+                print(f"  SQL: {result['sql']}")
+                print(f"  SQLite: {result['sqlite']}")
+        else:
+            results = export_all_lotteries()
+            print("\n" + "="*60)
+            print("导出完成")
+            print("="*60)
+            for lottery_type, result in results.items():
+                if 'error' in result:
+                    print(f"{LOTTERY_NAMES[lottery_type]}: ❌ {result['error']}")
+                else:
+                    print(f"{LOTTERY_NAMES[lottery_type]}: ✅ {result['count']} 条数据")
+                    print(f"  CSV: {result['csv']}")
+                    print(f"  SQL: {result['sql']}")
+                    print(f"  SQLite: {result['sqlite']}")
     
     elif args.command == 'schedule':
         schedule.start_schedule()

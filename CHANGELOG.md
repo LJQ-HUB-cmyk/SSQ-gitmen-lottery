@@ -1,5 +1,38 @@
 # 📝 更新日志
 
+## [3.3.0] - 2024-12-19
+
+### 🎯 新增功能 - Python 版本数据导出
+- **数据导出模块**：新增 `cli/export.py` 模块，支持导出彩票数据
+- **多格式支持**：支持导出为 CSV、MySQL SQL、SQLite SQL 三种格式
+- **动态 Schema**：自动适应数据库结构变化，无需修改代码
+- **完整 SQL**：包含 DROP TABLE + CREATE TABLE + INSERT 语句，可直接导入
+- **命令行接口**：通过 `python lottery.py export` 命令导出数据
+- **批量导出**：支持一次导出所有彩票类型或指定类型
+
+### 📦 新增文件
+- `cli/export.py` - Python 数据导出模块
+
+### 🔧 修改文件
+- `lottery.py` - 添加 export 命令支持
+
+### 📊 功能特性
+- **CSV 格式**：包含所有字段（包括 id），UTF-8 BOM 编码，Excel 可直接打开
+- **MySQL SQL**：不包含 id（自增），包含完整表结构和索引
+- **SQLite SQL**：不包含 id（自增），包含完整表结构和索引
+- **固定文件名**：使用 `{type}_latest.*` 格式，每次导出覆盖旧文件
+- **导出目录**：文件保存在 `data/export/` 目录
+
+### 💡 使用示例
+```bash
+# 导出所有彩票类型
+python lottery.py export
+
+# 导出指定类型
+python lottery.py export ssq
+python lottery.py export dlt
+```
+
 ## [3.2.0] - 2024-12-19
 
 ### 🎯 新增功能 - Cloudflare Worker 数据导出
