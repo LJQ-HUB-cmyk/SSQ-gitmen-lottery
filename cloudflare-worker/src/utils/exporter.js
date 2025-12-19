@@ -1,5 +1,5 @@
 /**
- * 数据导出工具 - 支持导出为 Excel 和 SQL 文件
+ * 数据导出工具 - 支持导出为 CSV 和 SQL 文件
  */
 
 export class DataExporter {
@@ -12,7 +12,7 @@ export class DataExporter {
    * 导出指定彩票类型的全量数据
    * @param {string} type - 彩票类型 (ssq, dlt, qxc, qlc)
    * @param {string} lotteryName - 彩票名称
-   * @returns {Promise<{excel: string, sql: string}>} 返回下载链接
+   * @returns {Promise<{csv: string, sql: string, sqlite: string}>} 返回下载链接
    */
   async exportLotteryData(type, lotteryName) {
     console.log(`开始导出 ${lotteryName} 数据...`);
@@ -32,6 +32,7 @@ export class DataExporter {
     const timestamp = now.toISOString().replace(/[:.]/g, '-').substring(0, 19);
     const csvFileName = `${type}/${date}/${type}_lottery_${timestamp}.csv`;
     const sqlFileName = `${type}/${date}/${type}_lottery_${timestamp}.sql`;
+    const sqliteFileName = `${type}/${date}/${type}_lottery_${timestamp}.sqlite.sql`;
     
     // 生成 CSV 文件（Excel 可以直接打开）
     const csvContent = this.generateCSV(type, data, lotteryName);
@@ -42,7 +43,6 @@ export class DataExporter {
     const sqlUrl = await this.uploadToR2(sqlFileName, sqlContent, 'text/plain');
     
     // 生成 SQLite 格式的 SQL 文件
-    const sqliteFileName = `${type}/${date}/${type}_lottery_${timestamp}.sqlite.sql`;
     const sqliteContent = this.generateSQL(type, data, lotteryName, 'sqlite');
     const sqliteUrl = await this.uploadToR2(sqliteFileName, sqliteContent, 'text/plain');
     
@@ -61,8 +61,7 @@ export class DataExporter {
    * 获取指定类型的全量数据
    */
   async getAllData(type) {
-    // 使用 Database 类的 getAll 方法，但需要获取所有数据
-    // 由于 getAll 有 limit 参数，我们需要直接访问底层数据库
+    // 使用 Database 类的底层数据库对象
     const results = await this.db.db
       .prepare(`SELECT * FROM ${type}_lottery ORDER BY lottery_no ASC`)
       .all();
@@ -108,182 +107,82 @@ export class DataExporter {
    */
   generateSQL(type, data, lotteryName, format = 'mysql') {
     const isSQLite = format === 'sqlite';
+    const insertCmd = isSQLite ? 'INSERT OR IGNORE' : 'INSERT IGNORE';
     
     let sql = `-- ${lotteryName} 数据导出\n`;
     sql += `-- 导出时间: ${new Date().toISOString()}\n`;
     sql += `-- 数据条数: ${data.length}\n`;
     sql += `-- 数据库格式: ${format.toUpperCase()}\n\n`;
     
-    if (type === 'ssq') {
-      sql += `-- 双色球数据表\n`;
-      sql += `CREATE TABLE IF NOT EXISTS ssq_lottery (\n`;
-      
-      if (isSQLite) {
-        sql += `  id INTEGER PRIMARY KEY AUTOINCREMENT,\n`;
-        sql += `  lottery_no TEXT UNIQUE NOT NULL,\n`;
-        sql += `  draw_date TEXT NOT NULL,\n`;
-        sql += `  red1 TEXT NOT NULL,\n`;
-        sql += `  red2 TEXT NOT NULL,\n`;
-        sql += `  red3 TEXT NOT NULL,\n`;
-        sql += `  red4 TEXT NOT NULL,\n`;
-        sql += `  red5 TEXT NOT NULL,\n`;
-        sql += `  red6 TEXT NOT NULL,\n`;
-        sql += `  blue TEXT NOT NULL,\n`;
-        sql += `  sorted_code TEXT NOT NULL,\n`;
-        sql += `  created_at TEXT DEFAULT (datetime('now')),\n`;
-        sql += `  updated_at TEXT DEFAULT (datetime('now'))\n`;
-        sql += `);\n\n`;
-      } else {
-        sql += `  id INT AUTO_INCREMENT PRIMARY KEY,\n`;
-      sql += `  lottery_no VARCHAR(20) UNIQUE NOT NULL,\n`;
-      sql += `  draw_date DATE NOT NULL,\n`;
-      sql += `  red1 VARCHAR(2) NOT NULL,\n`;
-      sql += `  red2 VARCHAR(2) NOT NULL,\n`;
-      sql += `  red3 VARCHAR(2) NOT NULL,\n`;
-      sql += `  red4 VARCHAR(2) NOT NULL,\n`;
-      sql += `  red5 VARCHAR(2) NOT NULL,\n`;
-      sql += `  red6 VARCHAR(2) NOT NULL,\n`;
-      sql += `  blue VARCHAR(2) NOT NULL,\n`;
-      sql += `  sorted_code VARCHAR(50) NOT NULL,\n`;
-      sql += `  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n`;
-      sql += `  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP\n`;
-      sql += isSQLite ? `);\n\n` : `) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n\n`;
-      
-      const insertCmd = isSQLite ? 'INSERT OR IGNORE' : 'INSERT IGNORE';
-      for (const row of data) {
-        sql += `${insertCmd} INTO ssq_lottery (lottery_no, draw_date, red1, red2, red3, red4, red5, red6, blue, sorted_code) VALUES `;
-        sql += `('${this.escapeSql(row.lottery_no)}', '${this.escapeSql(row.draw_date)}', `;
-        sql += `'${row.red1}', '${row.red2}', '${row.red3}', '${row.red4}', '${row.red5}', '${row.red6}', `;
-        sql += `'${row.blue}', '${this.escapeSql(row.sorted_code)}');\n`;
+    // 根据彩票类型生成对应的表结构和数据
+    const tableConfigs = {
+      ssq: {
+        tableName: 'ssq_lottery',
+        columns: isSQLite 
+          ? ['lottery_no TEXT', 'draw_date TEXT', 'red1 TEXT', 'red2 TEXT', 'red3 TEXT', 'red4 TEXT', 'red5 TEXT', 'red6 TEXT', 'blue TEXT', 'sorted_code TEXT']
+          : ['lottery_no VARCHAR(20)', 'draw_date DATE', 'red1 VARCHAR(2)', 'red2 VARCHAR(2)', 'red3 VARCHAR(2)', 'red4 VARCHAR(2)', 'red5 VARCHAR(2)', 'red6 VARCHAR(2)', 'blue VARCHAR(2)', 'sorted_code VARCHAR(50)'],
+        fields: ['lottery_no', 'draw_date', 'red1', 'red2', 'red3', 'red4', 'red5', 'red6', 'blue', 'sorted_code']
+      },
+      dlt: {
+        tableName: 'dlt_lottery',
+        columns: isSQLite
+          ? ['lottery_no TEXT', 'draw_date TEXT', 'front1 TEXT', 'front2 TEXT', 'front3 TEXT', 'front4 TEXT', 'front5 TEXT', 'back1 TEXT', 'back2 TEXT', 'sorted_code TEXT']
+          : ['lottery_no VARCHAR(20)', 'draw_date DATE', 'front1 VARCHAR(2)', 'front2 VARCHAR(2)', 'front3 VARCHAR(2)', 'front4 VARCHAR(2)', 'front5 VARCHAR(2)', 'back1 VARCHAR(2)', 'back2 VARCHAR(2)', 'sorted_code VARCHAR(50)'],
+        fields: ['lottery_no', 'draw_date', 'front1', 'front2', 'front3', 'front4', 'front5', 'back1', 'back2', 'sorted_code']
+      },
+      qxc: {
+        tableName: 'qxc_lottery',
+        columns: isSQLite
+          ? ['lottery_no TEXT', 'draw_date TEXT', 'num1 TEXT', 'num2 TEXT', 'num3 TEXT', 'num4 TEXT', 'num5 TEXT', 'num6 TEXT', 'num7 TEXT', 'sorted_code TEXT']
+          : ['lottery_no VARCHAR(20)', 'draw_date DATE', 'num1 VARCHAR(2)', 'num2 VARCHAR(2)', 'num3 VARCHAR(2)', 'num4 VARCHAR(2)', 'num5 VARCHAR(2)', 'num6 VARCHAR(2)', 'num7 VARCHAR(2)', 'sorted_code VARCHAR(50)'],
+        fields: ['lottery_no', 'draw_date', 'num1', 'num2', 'num3', 'num4', 'num5', 'num6', 'num7', 'sorted_code']
+      },
+      qlc: {
+        tableName: 'qlc_lottery',
+        columns: isSQLite
+          ? ['lottery_no TEXT', 'draw_date TEXT', 'basic1 TEXT', 'basic2 TEXT', 'basic3 TEXT', 'basic4 TEXT', 'basic5 TEXT', 'basic6 TEXT', 'basic7 TEXT', 'special TEXT', 'sorted_code TEXT']
+          : ['lottery_no VARCHAR(20)', 'draw_date DATE', 'basic1 VARCHAR(2)', 'basic2 VARCHAR(2)', 'basic3 VARCHAR(2)', 'basic4 VARCHAR(2)', 'basic5 VARCHAR(2)', 'basic6 VARCHAR(2)', 'basic7 VARCHAR(2)', 'special VARCHAR(2)', 'sorted_code VARCHAR(50)'],
+        fields: ['lottery_no', 'draw_date', 'basic1', 'basic2', 'basic3', 'basic4', 'basic5', 'basic6', 'basic7', 'special', 'sorted_code']
       }
-    } else if (type === 'dlt') {
-      sql += `-- 大乐透数据表\n`;
-      sql += `CREATE TABLE IF NOT EXISTS dlt_lottery (\n`;
-      
-      if (isSQLite) {
-        sql += `  id INTEGER PRIMARY KEY AUTOINCREMENT,\n`;
-        sql += `  lottery_no TEXT UNIQUE NOT NULL,\n`;
-        sql += `  draw_date TEXT NOT NULL,\n`;
-        sql += `  front1 TEXT NOT NULL,\n`;
-        sql += `  front2 TEXT NOT NULL,\n`;
-        sql += `  front3 TEXT NOT NULL,\n`;
-        sql += `  front4 TEXT NOT NULL,\n`;
-        sql += `  front5 TEXT NOT NULL,\n`;
-        sql += `  back1 TEXT NOT NULL,\n`;
-        sql += `  back2 TEXT NOT NULL,\n`;
-        sql += `  sorted_code TEXT NOT NULL,\n`;
-        sql += `  created_at TEXT DEFAULT (datetime('now')),\n`;
-        sql += `  updated_at TEXT DEFAULT (datetime('now'))\n`;
-        sql += `);\n\n`;
-      } else {
-        sql += `  id INT AUTO_INCREMENT PRIMARY KEY,\n`;
-      sql += `  lottery_no VARCHAR(20) UNIQUE NOT NULL,\n`;
-      sql += `  draw_date DATE NOT NULL,\n`;
-      sql += `  front1 VARCHAR(2) NOT NULL,\n`;
-      sql += `  front2 VARCHAR(2) NOT NULL,\n`;
-      sql += `  front3 VARCHAR(2) NOT NULL,\n`;
-      sql += `  front4 VARCHAR(2) NOT NULL,\n`;
-      sql += `  front5 VARCHAR(2) NOT NULL,\n`;
-      sql += `  back1 VARCHAR(2) NOT NULL,\n`;
-      sql += `  back2 VARCHAR(2) NOT NULL,\n`;
-      sql += `  sorted_code VARCHAR(50) NOT NULL,\n`;
+    };
+    
+    const config = tableConfigs[type];
+    if (!config) {
+      throw new Error(`不支持的彩票类型: ${type}`);
+    }
+    
+    // 生成 CREATE TABLE 语句
+    sql += `-- ${lotteryName}数据表\n`;
+    sql += `CREATE TABLE IF NOT EXISTS ${config.tableName} (\n`;
+    
+    if (isSQLite) {
+      sql += `  id INTEGER PRIMARY KEY AUTOINCREMENT,\n`;
+    } else {
+      sql += `  id INT AUTO_INCREMENT PRIMARY KEY,\n`;
+    }
+    
+    sql += `  ${config.columns.map(col => col + ' NOT NULL').join(',\n  ')},\n`;
+    
+    if (isSQLite) {
+      sql += `  created_at TEXT DEFAULT (datetime('now')),\n`;
+      sql += `  updated_at TEXT DEFAULT (datetime('now')),\n`;
+      sql += `  UNIQUE(lottery_no)\n`;
+      sql += `);\n\n`;
+    } else {
       sql += `  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n`;
-      sql += `  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP\n`;
-      sql += isSQLite ? `);\n\n` : `) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n\n`;
+      sql += `  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n`;
+      sql += `  UNIQUE KEY unique_lottery_no (lottery_no)\n`;
+      sql += `) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n\n`;
+    }
+    
+    // 生成 INSERT 语句
+    for (const row of data) {
+      const values = config.fields.map(field => {
+        const value = row[field];
+        return `'${this.escapeSql(value)}'`;
+      }).join(', ');
       
-      const insertCmd = isSQLite ? 'INSERT OR IGNORE' : 'INSERT IGNORE';
-      for (const row of data) {
-        sql += `${insertCmd} INTO dlt_lottery (lottery_no, draw_date, front1, front2, front3, front4, front5, back1, back2, sorted_code) VALUES `;
-        sql += `('${this.escapeSql(row.lottery_no)}', '${this.escapeSql(row.draw_date)}', `;
-        sql += `'${row.front1}', '${row.front2}', '${row.front3}', '${row.front4}', '${row.front5}', `;
-        sql += `'${row.back1}', '${row.back2}', '${this.escapeSql(row.sorted_code)}');\n`;
-      }
-    } else if (type === 'qxc') {
-      sql += `-- 七星彩数据表\n`;
-      sql += `CREATE TABLE IF NOT EXISTS qxc_lottery (\n`;
-      
-      if (isSQLite) {
-        sql += `  id INTEGER PRIMARY KEY AUTOINCREMENT,\n`;
-        sql += `  lottery_no TEXT UNIQUE NOT NULL,\n`;
-        sql += `  draw_date TEXT NOT NULL,\n`;
-        sql += `  num1 TEXT NOT NULL,\n`;
-        sql += `  num2 TEXT NOT NULL,\n`;
-        sql += `  num3 TEXT NOT NULL,\n`;
-        sql += `  num4 TEXT NOT NULL,\n`;
-        sql += `  num5 TEXT NOT NULL,\n`;
-        sql += `  num6 TEXT NOT NULL,\n`;
-        sql += `  num7 TEXT NOT NULL,\n`;
-        sql += `  sorted_code TEXT NOT NULL,\n`;
-        sql += `  created_at TEXT DEFAULT (datetime('now')),\n`;
-        sql += `  updated_at TEXT DEFAULT (datetime('now'))\n`;
-        sql += `);\n\n`;
-      } else {
-        sql += `  id INT AUTO_INCREMENT PRIMARY KEY,\n`;
-      sql += `  lottery_no VARCHAR(20) UNIQUE NOT NULL,\n`;
-      sql += `  draw_date DATE NOT NULL,\n`;
-      sql += `  num1 VARCHAR(2) NOT NULL,\n`;
-      sql += `  num2 VARCHAR(2) NOT NULL,\n`;
-      sql += `  num3 VARCHAR(2) NOT NULL,\n`;
-      sql += `  num4 VARCHAR(2) NOT NULL,\n`;
-      sql += `  num5 VARCHAR(2) NOT NULL,\n`;
-      sql += `  num6 VARCHAR(2) NOT NULL,\n`;
-      sql += `  num7 VARCHAR(2) NOT NULL,\n`;
-      sql += `  sorted_code VARCHAR(50) NOT NULL,\n`;
-      sql += `  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n`;
-      sql += `  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP\n`;
-      sql += isSQLite ? `);\n\n` : `) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n\n`;
-      
-      const insertCmd = isSQLite ? 'INSERT OR IGNORE' : 'INSERT IGNORE';
-      for (const row of data) {
-        sql += `${insertCmd} INTO qxc_lottery (lottery_no, draw_date, num1, num2, num3, num4, num5, num6, num7, sorted_code) VALUES `;
-        sql += `('${this.escapeSql(row.lottery_no)}', '${this.escapeSql(row.draw_date)}', `;
-        sql += `'${row.num1}', '${row.num2}', '${row.num3}', '${row.num4}', '${row.num5}', '${row.num6}', '${row.num7}', `;
-        sql += `'${this.escapeSql(row.sorted_code)}');\n`;
-      }
-    } else if (type === 'qlc') {
-      sql += `-- 七乐彩数据表\n`;
-      sql += `CREATE TABLE IF NOT EXISTS qlc_lottery (\n`;
-      
-      if (isSQLite) {
-        sql += `  id INTEGER PRIMARY KEY AUTOINCREMENT,\n`;
-        sql += `  lottery_no TEXT UNIQUE NOT NULL,\n`;
-        sql += `  draw_date TEXT NOT NULL,\n`;
-        sql += `  basic1 TEXT NOT NULL,\n`;
-        sql += `  basic2 TEXT NOT NULL,\n`;
-        sql += `  basic3 TEXT NOT NULL,\n`;
-        sql += `  basic4 TEXT NOT NULL,\n`;
-        sql += `  basic5 TEXT NOT NULL,\n`;
-        sql += `  basic6 TEXT NOT NULL,\n`;
-        sql += `  basic7 TEXT NOT NULL,\n`;
-        sql += `  special TEXT NOT NULL,\n`;
-        sql += `  sorted_code TEXT NOT NULL,\n`;
-        sql += `  created_at TEXT DEFAULT (datetime('now')),\n`;
-        sql += `  updated_at TEXT DEFAULT (datetime('now'))\n`;
-        sql += `);\n\n`;
-      } else {
-        sql += `  id INT AUTO_INCREMENT PRIMARY KEY,\n`;
-      sql += `  lottery_no VARCHAR(20) UNIQUE NOT NULL,\n`;
-      sql += `  draw_date DATE NOT NULL,\n`;
-      sql += `  basic1 VARCHAR(2) NOT NULL,\n`;
-      sql += `  basic2 VARCHAR(2) NOT NULL,\n`;
-      sql += `  basic3 VARCHAR(2) NOT NULL,\n`;
-      sql += `  basic4 VARCHAR(2) NOT NULL,\n`;
-      sql += `  basic5 VARCHAR(2) NOT NULL,\n`;
-      sql += `  basic6 VARCHAR(2) NOT NULL,\n`;
-      sql += `  basic7 VARCHAR(2) NOT NULL,\n`;
-      sql += `  special VARCHAR(2) NOT NULL,\n`;
-      sql += `  sorted_code VARCHAR(50) NOT NULL,\n`;
-      sql += `  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n`;
-      sql += `  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP\n`;
-      sql += isSQLite ? `);\n\n` : `) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n\n`;
-      
-      const insertCmd = isSQLite ? 'INSERT OR IGNORE' : 'INSERT IGNORE';
-      for (const row of data) {
-        sql += `${insertCmd} INTO qlc_lottery (lottery_no, draw_date, basic1, basic2, basic3, basic4, basic5, basic6, basic7, special, sorted_code) VALUES `;
-        sql += `('${this.escapeSql(row.lottery_no)}', '${this.escapeSql(row.draw_date)}', `;
-        sql += `'${row.basic1}', '${row.basic2}', '${row.basic3}', '${row.basic4}', '${row.basic5}', '${row.basic6}', '${row.basic7}', `;
-        sql += `'${row.special}', '${this.escapeSql(row.sorted_code)}');\n`;
-      }
+      sql += `${insertCmd} INTO ${config.tableName} (${config.fields.join(', ')}) VALUES (${values});\n`;
     }
     
     return sql;
@@ -294,16 +193,8 @@ export class DataExporter {
    */
   async uploadToR2(fileName, content, contentType) {
     try {
-      // 将内容转换为字符串或 ArrayBuffer
-      let buffer;
-      if (typeof content === 'string') {
-        buffer = content;
-      } else {
-        buffer = content;
-      }
-      
       // 上传到 R2
-      await this.r2Bucket.put(fileName, buffer, {
+      await this.r2Bucket.put(fileName, content, {
         httpMetadata: {
           contentType: contentType
         }
