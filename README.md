@@ -285,3 +285,4 @@ SELECT red1,red2, COUNT(*) AS cnt
 FROM ssq_lottery 
 GROUP BY red1,red2
 HAVING COUNT(*) > 1 order by cnt desc;
+
