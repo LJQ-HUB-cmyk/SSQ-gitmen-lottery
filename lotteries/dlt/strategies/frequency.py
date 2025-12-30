@@ -56,19 +56,13 @@ class FrequencyStrategy(BaseStrategy):
         return sorted(balls)
     
     def generate_back_balls(self, context: Dict) -> List[int]:
-        """生成后区号码
+        """生成后区号码（基于三种弱周期理论）
         
         Args:
-            context: 包含 back_frequency 的上下文
+            context: 包含 back_frequency 和 history_data 的上下文
             
         Returns:
             2个后区号码
         """
-        back_frequency = context.get('back_frequency', {})
-        
-        # 80% 概率选择高频号码，20% 概率随机
-        if random.random() < 0.8 and back_frequency:
-            top_back = sorted(back_frequency.keys(), key=lambda x: back_frequency[x], reverse=True)[:6]
-            return sorted(self.random_select(top_back, 2))
-        else:
-            return sorted(self.random_select(self.BACK_RANGE, 2))
+        from .back_helper import smart_back_selection
+        return smart_back_selection(context, self.BACK_RANGE, 2)

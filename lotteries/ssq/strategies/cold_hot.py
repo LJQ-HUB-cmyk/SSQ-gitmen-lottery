@@ -69,34 +69,13 @@ class ColdHotStrategy(BaseStrategy):
         return sorted(balls)
     
     def generate_blue_ball(self, context: Dict) -> int:
-        """生成蓝球
+        """生成蓝球（基于三种弱周期理论）
         
         Args:
-            context: 包含 blue_frequency 的上下文
+            context: 包含 blue_frequency 和 history_data 的上下文
             
         Returns:
             蓝球号码
         """
-        blue_frequency = context.get('blue_frequency', {})
-        
-        if not blue_frequency:
-            return random.choice(self.BLUE_RANGE)
-        
-        # 按频率排序
-        sorted_blue = sorted(blue_frequency.keys(), key=lambda x: blue_frequency[x], reverse=True)
-        
-        # 60% 热号，30% 温号，10% 冷号
-        rand = random.random()
-        
-        if rand < 0.6:
-            # 热号（前5个）
-            hot_blue = sorted_blue[:5]
-            return random.choice(hot_blue)
-        elif rand < 0.9:
-            # 温号（中间6个）
-            warm_blue = sorted_blue[5:11] if len(sorted_blue) > 11 else sorted_blue[5:]
-            return random.choice(warm_blue) if warm_blue else random.choice(sorted_blue[:5])
-        else:
-            # 冷号（后5个）
-            cold_blue = sorted_blue[11:] if len(sorted_blue) > 11 else []
-            return random.choice(cold_blue) if cold_blue else random.choice(self.BLUE_RANGE)
+        from .blue_helper import smart_blue_selection
+        return smart_blue_selection(context, self.BLUE_RANGE)

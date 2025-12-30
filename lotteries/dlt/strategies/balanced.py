@@ -67,41 +67,13 @@ class BalancedStrategy(BaseStrategy):
         return sorted(balls)
     
     def generate_back_balls(self, context: Dict) -> List[int]:
-        """生成后区号码
+        """生成后区号码（基于三种弱周期理论）
         
         Args:
-            context: 包含 back_frequency 的上下文
+            context: 包含 back_frequency 和 history_data 的上下文
             
         Returns:
             2个后区号码
         """
-        back_frequency = context.get('back_frequency', {})
-        
-        # 后区追求大小号均衡：1个小号(1-6)，1个大号(7-12)
-        small_back = list(range(1, 7))
-        large_back = list(range(7, 13))
-        
-        if back_frequency:
-            # 从中频号码中选择
-            sorted_back = sorted(back_frequency.keys(), key=lambda x: back_frequency[x], reverse=True)
-            mid_freq_back = sorted_back[3:9] if len(sorted_back) > 9 else sorted_back[2:]
-            
-            mid_small = [b for b in mid_freq_back if b in small_back]
-            mid_large = [b for b in mid_freq_back if b in large_back]
-            
-            if len(mid_small) == 0:
-                mid_small = small_back
-            if len(mid_large) == 0:
-                mid_large = large_back
-            
-            selected = [
-                random.choice(mid_small),
-                random.choice(mid_large)
-            ]
-        else:
-            selected = [
-                random.choice(small_back),
-                random.choice(large_back)
-            ]
-        
-        return sorted(selected)
+        from .back_helper import smart_back_selection
+        return smart_back_selection(context, self.BACK_RANGE, 2)

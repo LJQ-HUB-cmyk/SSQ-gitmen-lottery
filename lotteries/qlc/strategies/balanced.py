@@ -29,8 +29,9 @@ class BalancedStrategy(BaseStrategy):
         basic_balls.extend(self.random_select(small_numbers, small_count))
         basic_balls.extend(self.random_select(large_numbers, large_count))
         
-        # 从剩余号码中选择特别号
+        # 选择特别号（使用智能算法）
+        from .special_helper import smart_special_selection
         available_for_special = [b for b in self.BASIC_RANGE if b not in basic_balls]
-        special_ball = random.choice(available_for_special) if available_for_special else random.choice(self.BASIC_RANGE)
+        special_ball = smart_special_selection(context, available_for_special)
         
         return sorted(basic_balls), special_ball

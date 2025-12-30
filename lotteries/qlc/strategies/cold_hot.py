@@ -19,7 +19,6 @@ class ColdHotStrategy(BaseStrategy):
     def generate_balls(self, context: Dict) -> Tuple[List[int], int]:
         """生成基本号和特别号"""
         basic_frequency = context.get('basic_frequency', {})
-        special_frequency = context.get('special_frequency', {})
         
         if basic_frequency:
             # 获取热号（高频）和冷号（低频）
@@ -36,21 +35,9 @@ class ColdHotStrategy(BaseStrategy):
             # 没有历史数据，随机选择
             basic_balls = self.random_select(self.BASIC_RANGE, self.BASIC_COUNT)
         
-        # 选择特别号
+        # 选择特别号（使用智能算法）
+        from .special_helper import smart_special_selection
         available_for_special = [b for b in self.BASIC_RANGE if b not in basic_balls]
-        
-        if special_frequency and available_for_special:
-            # 50%热号，50%冷号
-            sorted_special = sorted(special_frequency.keys(), key=lambda x: special_frequency[x], reverse=True)
-            if random.random() < 0.5:
-                # 热号
-                hot_special = [b for b in sorted_special[:5] if b in available_for_special]
-                special_ball = random.choice(hot_special) if hot_special else random.choice(available_for_special)
-            else:
-                # 冷号
-                cold_special = [b for b in sorted_special[-5:] if b in available_for_special]
-                special_ball = random.choice(cold_special) if cold_special else random.choice(available_for_special)
-        else:
-            special_ball = random.choice(available_for_special) if available_for_special else random.choice(self.BASIC_RANGE)
+        special_ball = smart_special_selection(context, available_for_special)
         
         return sorted(basic_balls), special_ball

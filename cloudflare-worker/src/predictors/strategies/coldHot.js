@@ -5,6 +5,7 @@
  */
 
 import { BaseStrategy } from './base.js';
+import { smartBlueSelection } from './blueHelper.js';
 
 export class ColdHotStrategy extends BaseStrategy {
   constructor() {
@@ -48,30 +49,9 @@ export class ColdHotStrategy extends BaseStrategy {
   }
 
   /**
-   * 生成蓝球
+   * 生成蓝球（基于三种弱周期理论）
    */
   generateBlueBall(context) {
-    const { blueFrequency } = context;
-    
-    // 60% 热号，30% 温号，10% 冷号
-    const rand = Math.random();
-    
-    if (rand < 0.6 && blueFrequency.length > 0) {
-      // 热号（前5个）
-      const hotBlue = blueFrequency.slice(0, 5);
-      return hotBlue[Math.floor(Math.random() * hotBlue.length)].ball;
-    } else if (rand < 0.9 && blueFrequency.length > 5) {
-      // 温号（中间6个）
-      const warmBlue = blueFrequency.slice(5, 11);
-      return warmBlue[Math.floor(Math.random() * warmBlue.length)].ball;
-    } else {
-      // 冷号（后5个）
-      const coldBlue = blueFrequency.slice(11);
-      if (coldBlue.length > 0) {
-        return coldBlue[Math.floor(Math.random() * coldBlue.length)].ball;
-      } else {
-        return this.BLUE_RANGE[Math.floor(Math.random() * this.BLUE_RANGE.length)];
-      }
-    }
+    return smartBlueSelection(context, this.BLUE_RANGE);
   }
 }

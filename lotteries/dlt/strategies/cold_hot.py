@@ -55,28 +55,13 @@ class ColdHotStrategy(BaseStrategy):
         return sorted(balls)
     
     def generate_back_balls(self, context: Dict) -> List[int]:
-        """生成后区号码
+        """生成后区号码（基于三种弱周期理论）
         
         Args:
-            context: 包含 back_frequency 的上下文
+            context: 包含 back_frequency 和 history_data 的上下文
             
         Returns:
             2个后区号码
         """
-        back_frequency = context.get('back_frequency', {})
-        
-        if not back_frequency:
-            return sorted(self.random_select(self.BACK_RANGE, 2))
-        
-        # 获取热号和冷号
-        sorted_back = sorted(back_frequency.keys(), key=lambda x: back_frequency[x], reverse=True)
-        hot_back = sorted_back[:4]
-        cold_back = sorted_back[-4:]
-        
-        # 1个热号，1个冷号
-        selected = [
-            random.choice(hot_back),
-            random.choice(cold_back)
-        ]
-        
-        return sorted(selected)
+        from .back_helper import smart_back_selection
+        return smart_back_selection(context, self.BACK_RANGE, 2)

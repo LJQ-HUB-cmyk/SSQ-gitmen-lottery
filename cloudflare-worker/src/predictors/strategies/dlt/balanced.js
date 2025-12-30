@@ -4,6 +4,7 @@
  */
 
 import { BaseStrategy } from './base.js';
+import { smartBackSelection } from './backHelper.js';
 
 export class BalancedStrategy extends BaseStrategy {
   constructor() {
@@ -61,42 +62,6 @@ export class BalancedStrategy extends BaseStrategy {
   }
 
   generateBackBalls(context) {
-    const backFrequency = context.backFrequency || {};
-    
-    // 后区追求大小号均衡：1个小号(1-6)，1个大号(7-12)
-    const smallBack = Array.from({ length: 6 }, (_, i) => i + 1);
-    const largeBack = Array.from({ length: 6 }, (_, i) => i + 7);
-    
-    let selected;
-    
-    if (Object.keys(backFrequency).length > 0) {
-      // 从中频号码中选择
-      const sortedBack = Object.keys(backFrequency)
-        .map(k => parseInt(k))
-        .sort((a, b) => backFrequency[b] - backFrequency[a]);
-      const midFreqBack = sortedBack.slice(3, 9);
-      
-      let midSmall = midFreqBack.filter(b => smallBack.includes(b));
-      let midLarge = midFreqBack.filter(b => largeBack.includes(b));
-      
-      if (midSmall.length === 0) {
-        midSmall = smallBack;
-      }
-      if (midLarge.length === 0) {
-        midLarge = largeBack;
-      }
-      
-      selected = [
-        midSmall[Math.floor(Math.random() * midSmall.length)],
-        midLarge[Math.floor(Math.random() * midLarge.length)]
-      ];
-    } else {
-      selected = [
-        smallBack[Math.floor(Math.random() * smallBack.length)],
-        largeBack[Math.floor(Math.random() * largeBack.length)]
-      ];
-    }
-    
-    return selected.sort((a, b) => a - b);
+    return smartBackSelection(context, this.BACK_RANGE, 2);
   }
 }

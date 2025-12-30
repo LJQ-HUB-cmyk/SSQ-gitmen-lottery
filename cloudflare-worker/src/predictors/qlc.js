@@ -2,6 +2,8 @@
  * 七乐彩预测器 - Cloudflare Worker 版本
  */
 
+import { smartSpecialSelection } from './specialHelper.js';
+
 export class QLCPredictor {
   constructor(db, options = {}) {
     this.db = db;
@@ -22,6 +24,9 @@ export class QLCPredictor {
     if (!historyData || historyData.length === 0) {
       throw new Error('没有历史数据');
     }
+    
+    // 保存历史数据供策略使用
+    this.historyData = historyData;
     
     console.log(`七乐彩预测: ${historyData.length} 条历史数据`);
     
@@ -128,15 +133,9 @@ export class QLCPredictor {
       basicBalls.push(remaining.splice(idx, 1)[0]);
     }
     
+    // 使用智能特别号选择
     const availableForSpecial = this.basicRange.filter(n => !basicBalls.includes(n));
-    const sortedSpecial = Object.entries(specialFreq)
-      .filter(([num]) => availableForSpecial.includes(parseInt(num)))
-      .sort(([,a], [,b]) => b - a)
-      .map(([num]) => parseInt(num));
-    
-    const specialBall = sortedSpecial.length > 0 ? 
-      sortedSpecial[Math.floor(Math.random() * Math.min(5, sortedSpecial.length))] :
-      availableForSpecial[Math.floor(Math.random() * availableForSpecial.length)];
+    const specialBall = smartSpecialSelection(this.historyData, specialFreq, availableForSpecial);
     
     return {
       basic_balls: basicBalls.sort((a, b) => a - b),
@@ -173,8 +172,9 @@ export class QLCPredictor {
       ...this.randomSelect(largeNums, largeCount)
     ];
     
+    // 使用智能特别号选择
     const availableForSpecial = this.basicRange.filter(n => !basicBalls.includes(n));
-    const specialBall = availableForSpecial[Math.floor(Math.random() * availableForSpecial.length)];
+    const specialBall = smartSpecialSelection(this.historyData, {}, availableForSpecial);
     
     return {
       basic_balls: basicBalls.sort((a, b) => a - b),
@@ -200,18 +200,9 @@ export class QLCPredictor {
       ...this.randomSelect(coldBalls, 3)
     ];
     
+    // 使用智能特别号选择
     const availableForSpecial = this.basicRange.filter(n => !basicBalls.includes(n));
-    const sortedSpecial = Object.entries(specialFreq)
-      .filter(([num]) => availableForSpecial.includes(parseInt(num)))
-      .sort(([,a], [,b]) => b - a)
-      .map(([num]) => parseInt(num));
-    
-    const specialBall = sortedSpecial.length > 0 ?
-      (Math.random() < 0.5 ? 
-        sortedSpecial[Math.floor(Math.random() * Math.min(3, sortedSpecial.length))] :
-        sortedSpecial[Math.max(0, sortedSpecial.length - Math.floor(Math.random() * 3) - 1)]
-      ) :
-      availableForSpecial[Math.floor(Math.random() * availableForSpecial.length)];
+    const specialBall = smartSpecialSelection(this.historyData, specialFreq, availableForSpecial);
     
     return {
       basic_balls: basicBalls.sort((a, b) => a - b),

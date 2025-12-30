@@ -5,6 +5,7 @@
  */
 
 import { BaseStrategy } from './base.js';
+import { smartBlueSelection } from './blueHelper.js';
 
 export class FrequencyStrategy extends BaseStrategy {
   constructor() {
@@ -43,17 +44,9 @@ export class FrequencyStrategy extends BaseStrategy {
   }
 
   /**
-   * 生成蓝球
+   * 生成蓝球（基于三种弱周期理论）
    */
   generateBlueBall(context) {
-    const { blueFrequency } = context;
-    
-    // 80% 概率选择高频蓝球，20% 概率随机
-    if (Math.random() < 0.8 && blueFrequency.length > 0) {
-      const topBlue = blueFrequency.slice(0, 5);
-      return topBlue[Math.floor(Math.random() * topBlue.length)].ball;
-    } else {
-      return this.BLUE_RANGE[Math.floor(Math.random() * this.BLUE_RANGE.length)];
-    }
+    return smartBlueSelection(context, this.BLUE_RANGE);
   }
 }

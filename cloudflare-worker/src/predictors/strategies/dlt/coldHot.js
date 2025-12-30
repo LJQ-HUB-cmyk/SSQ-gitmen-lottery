@@ -4,6 +4,7 @@
  */
 
 import { BaseStrategy } from './base.js';
+import { smartBackSelection } from './backHelper.js';
 
 export class ColdHotStrategy extends BaseStrategy {
   constructor() {
@@ -45,25 +46,6 @@ export class ColdHotStrategy extends BaseStrategy {
   }
 
   generateBackBalls(context) {
-    const backFrequency = context.backFrequency || {};
-    
-    if (Object.keys(backFrequency).length === 0) {
-      return this.randomSelect(this.BACK_RANGE, 2).sort((a, b) => a - b);
-    }
-    
-    // 获取热号和冷号
-    const sortedBack = Object.keys(backFrequency)
-      .map(k => parseInt(k))
-      .sort((a, b) => backFrequency[b] - backFrequency[a]);
-    const hotBack = sortedBack.slice(0, 4);
-    const coldBack = sortedBack.slice(-4);
-    
-    // 1个热号，1个冷号
-    const selected = [
-      hotBack[Math.floor(Math.random() * hotBack.length)],
-      coldBack[Math.floor(Math.random() * coldBack.length)]
-    ];
-    
-    return selected.sort((a, b) => a - b);
+    return smartBackSelection(context, this.BACK_RANGE, 2);
   }
 }

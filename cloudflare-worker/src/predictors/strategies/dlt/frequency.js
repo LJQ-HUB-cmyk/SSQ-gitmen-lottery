@@ -4,6 +4,7 @@
  */
 
 import { BaseStrategy } from './base.js';
+import { smartBackSelection } from './backHelper.js';
 
 export class FrequencyStrategy extends BaseStrategy {
   constructor() {
@@ -46,17 +47,6 @@ export class FrequencyStrategy extends BaseStrategy {
   }
 
   generateBackBalls(context) {
-    const backFrequency = context.backFrequency || {};
-    
-    // 80% 概率选择高频号码，20% 概率随机
-    if (Math.random() < 0.8 && Object.keys(backFrequency).length > 0) {
-      const topBack = Object.keys(backFrequency)
-        .map(k => parseInt(k))
-        .sort((a, b) => backFrequency[b] - backFrequency[a])
-        .slice(0, 6);
-      return this.randomSelect(topBack, 2).sort((a, b) => a - b);
-    } else {
-      return this.randomSelect(this.BACK_RANGE, 2).sort((a, b) => a - b);
-    }
+    return smartBackSelection(context, this.BACK_RANGE, 2);
   }
 }

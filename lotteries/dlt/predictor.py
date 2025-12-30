@@ -114,7 +114,8 @@ class DLTPredictor(BasePredictor):
         context = {
             'front_frequency': dict(self.front_ball_frequency),
             'back_frequency': dict(self.back_ball_frequency),
-            'historical_combinations': self.historical_combinations
+            'historical_combinations': self.historical_combinations,
+            'history_data': self.lottery_data  # 添加历史数据用于智能后区选择
         }
 
         # 计算每个策略生成的组合数

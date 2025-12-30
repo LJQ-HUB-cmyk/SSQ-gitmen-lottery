@@ -47,19 +47,13 @@ class BalancedStrategy(BaseStrategy):
         return sorted(balls)
     
     def generate_blue_ball(self, context: Dict) -> int:
-        """生成蓝球
+        """生成蓝球（基于三种弱周期理论）
         
         Args:
-            context: 包含 blue_frequency 的上下文
+            context: 包含 blue_frequency 和 history_data 的上下文
             
         Returns:
             蓝球号码
         """
-        blue_frequency = context.get('blue_frequency', {})
-        
-        # 50% 概率选择高频，50% 概率随机
-        if random.random() < 0.5 and blue_frequency:
-            top_blue = sorted(blue_frequency.keys(), key=lambda x: blue_frequency[x], reverse=True)[:8]
-            return random.choice(top_blue)
-        else:
-            return random.choice(self.BLUE_RANGE)
+        from .blue_helper import smart_blue_selection
+        return smart_blue_selection(context, self.BLUE_RANGE)
